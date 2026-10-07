@@ -5,10 +5,10 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class QuacksService {
-  constructor(private readonly quackRepository: QuackRepository) { }
+  constructor(private readonly quackRepository: QuackRepository) {}
 
-  async getQuacks(): Promise<Quack[]> {
-    return this.quackRepository.getQuacks();
+  async getQuacks(search?: string): Promise<Quack[]> {
+    return this.quackRepository.getQuacks(search?.trim() || undefined);
   }
 
   async createQuack(

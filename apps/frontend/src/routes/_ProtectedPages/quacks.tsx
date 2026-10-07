@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 
@@ -11,8 +12,18 @@ export const Route = createFileRoute("/_ProtectedPages/quacks")({
   component: QuacksPage,
 })
 
+const SEARCH_DEBOUNCE_MS = 250
+
 function QuacksPage() {
-  const quacksQuery = useQuery(quacksQueryOptions())
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setSearchQuery(searchTerm.trim()), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [searchTerm])
+
+  const quacksQuery = useQuery(quacksQueryOptions(searchQuery))
 
   return (
     <>
@@ -24,6 +35,8 @@ function QuacksPage() {
 
         <QuackList
           quacks={quacksQuery.data ?? []}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
           isLoading={quacksQuery.isLoading}
           error={quacksQuery.error ?? undefined}
           // Only the error state offers a retry — posting invalidates the list,

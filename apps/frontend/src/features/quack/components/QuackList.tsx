@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { Loader2, RefreshCw } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -10,29 +9,21 @@ import { QuackItem } from "@/features/quack/components/QuackItem"
 
 type QuackListProps = {
   quacks: Quack[]
+  searchTerm: string
+  onSearchChange: (searchTerm: string) => void
   isLoading?: boolean
   error?: Error
   onReload?: () => void
 }
 
-export function QuackList({ quacks, isLoading, error, onReload }: QuackListProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
-  const visibleQuacks = normalizedSearchTerm
-    ? quacks.filter((quack) => {
-        const searchableText = [
-          quack.text,
-          quack.user.name,
-          quack.user.username,
-          `@${quack.user.username}`,
-        ]
-          .join(" ")
-          .toLowerCase()
-
-        return searchableText.includes(normalizedSearchTerm)
-      })
-    : quacks
-
+export function QuackList({
+  quacks,
+  searchTerm,
+  onSearchChange,
+  isLoading,
+  error,
+  onReload,
+}: QuackListProps) {
   return (
     <div className="flex flex-col">
       <div className="mb-4 flex flex-col gap-2">
@@ -46,12 +37,12 @@ export function QuackList({ quacks, isLoading, error, onReload }: QuackListProps
           id="quack-search"
           type="search"
           value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
+          onChange={(event) => onSearchChange(event.target.value)}
           placeholder="A word or author's name"
         />
       </div>
 
-      {isLoading && visibleQuacks.length === 0 ? (
+      {isLoading && quacks.length === 0 ? (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
         </div>
@@ -79,15 +70,15 @@ export function QuackList({ quacks, isLoading, error, onReload }: QuackListProps
         </Alert>
       ) : null}
 
-      {!isLoading && !error && visibleQuacks.length === 0 ? (
+      {!isLoading && !error && quacks.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          {normalizedSearchTerm
+          {searchTerm.trim()
             ? "No quacks match your search."
             : "No quacks yet. Post the first one."}
         </p>
       ) : null}
 
-      {visibleQuacks.map((quack) => (
+      {quacks.map((quack) => (
         <QuackItem
           key={quack.id}
           quack={quack}
