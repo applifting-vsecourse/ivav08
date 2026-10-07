@@ -2,20 +2,46 @@ import { Loader2, RefreshCw } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { QuackItem } from "@/features/quack/components/QuackItem"
 
 type QuackListProps = {
   quacks: Quack[]
+  searchTerm: string
+  onSearchChange: (searchTerm: string) => void
   isLoading?: boolean
   error?: Error
   onReload?: () => void
 }
 
-export function QuackList({ quacks, isLoading, error, onReload }: QuackListProps) {
+export function QuackList({
+  quacks,
+  searchTerm,
+  onSearchChange,
+  isLoading,
+  error,
+  onReload,
+}: QuackListProps) {
   return (
     <div className="flex flex-col">
+      <div className="mb-4 flex flex-col gap-2">
+        <label
+          htmlFor="quack-search"
+          className="text-sm font-medium"
+        >
+          Search posts
+        </label>
+        <Input
+          id="quack-search"
+          type="search"
+          value={searchTerm}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="A word or author's name"
+        />
+      </div>
+
       {isLoading && quacks.length === 0 ? (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
@@ -46,7 +72,9 @@ export function QuackList({ quacks, isLoading, error, onReload }: QuackListProps
 
       {!isLoading && !error && quacks.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No quacks yet. Post the first one.
+          {searchTerm.trim()
+            ? "No quacks match your search."
+            : "No quacks yet. Post the first one."}
         </p>
       ) : null}
 
