@@ -9,6 +9,7 @@ type QuackItemProps = { quack: Quack }
 
 export function QuackItem({ quack }: QuackItemProps) {
   const { name, username } = quack.user
+  const mood = quack.mood
 
   const initials = name
     .split(" ")
@@ -32,6 +33,11 @@ export function QuackItem({ quack }: QuackItemProps) {
           <time className="text-xs text-muted-foreground">{formatDate(quack.createdAt)}</time>
         </div>
         <p className="text-sm break-words whitespace-pre-line">{quack.text}</p>
+        {mood ? (
+          <span className="w-fit rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+            {mood.charAt(0).toUpperCase() + mood.slice(1)}
+          </span>
+        ) : null}
       </div>
     </article>
   )

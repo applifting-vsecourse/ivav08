@@ -9,6 +9,7 @@ import { QuacksService } from './quacks.service';
 const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   id: 'q1',
   text: 'quack quack',
+  mood: null,
   userId: 'u1',
   createdAt: new Date('2026-01-01T12:00:00Z'),
   updatedAt: new Date('2026-01-01T12:00:00Z'),
@@ -29,19 +30,20 @@ describe('QuacksService', () => {
   });
 
   it('creates a quack owned by the signed-in user', async () => {
-    const created = aQuack({ id: 'q2', text: 'hello' });
+    const created = aQuack({ id: 'q2', text: 'hello', mood: 'happy' });
     const repository = mock<QuackRepository>();
     repository.createQuack.mockResolvedValue(created);
 
     const service = new QuacksService(repository);
     const user = { id: 'u1' } as Identity;
 
-    await expect(service.createQuack(user, { text: 'hello' })).resolves.toEqual(
-      created,
-    );
+    await expect(
+      service.createQuack(user, { text: 'hello', mood: 'happy' }),
+    ).resolves.toEqual(created);
     // the author comes from the session, not from the caller's payload
     expect(repository.createQuack).toHaveBeenCalledWith({
       text: 'hello',
+      mood: 'happy',
       userId: 'u1',
     });
   });

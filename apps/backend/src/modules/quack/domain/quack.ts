@@ -7,6 +7,7 @@ export type QuackAuthor = {
 export type Quack = {
   id: string;
   text: string;
+  mood: string | null;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
