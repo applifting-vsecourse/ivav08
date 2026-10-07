@@ -34,7 +34,7 @@ import { QuackResponseDto } from './dto/quack.response.dto';
   }),
 )
 export class QuacksController {
-  constructor(private readonly quacksService: QuacksService) {}
+  constructor(private readonly quacksService: QuacksService) { }
 
   @Get()
   @ApiOperation({ summary: 'List all quacks' })
@@ -56,6 +56,7 @@ export class QuacksController {
   ): Promise<QuackResponseDto> {
     const quack = await this.quacksService.createQuack(user, {
       text: body.text,
+      mood: body.mood,
     });
     return QuackResponseDto.fromDomain(quack);
   }

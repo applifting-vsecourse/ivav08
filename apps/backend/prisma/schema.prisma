@@ -25,6 +25,7 @@ enum UserRole {
 model Quack {
   id        String   @id @default(cuid())
   text      String   @db.Text
+  mood      String?  @db.VarChar(50)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   createdAt DateTime @default(now())
