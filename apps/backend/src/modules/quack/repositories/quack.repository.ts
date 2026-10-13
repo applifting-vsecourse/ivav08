@@ -1,5 +1,6 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
 import {
+  Prisma,
   Poll as PrismaPoll,
   PollOption as PrismaPollOption,
   Quack as PrismaQuack,
@@ -7,6 +8,19 @@ import {
 } from '@/generated/prisma/client';
 import { Quack } from '@/modules/quack/domain/quack';
 import { Injectable } from '@nestjs/common';
+
+export type PollVoteWriteResult =
+  'ok' | 'poll-not-found' | 'poll-closed' | 'option-not-in-poll';
+
+export type PollEditResult =
+  | 'ok'
+  | 'poll-not-found'
+  | 'forbidden'
+  | 'invalid-options'
+  | 'option-has-votes';
+
+export type PollStatusWriteResult =
+  'ok' | 'poll-not-found' | 'quack-not-found' | 'forbidden';
 
 type PrismaPollWithOptions = PrismaPoll & {
   options: Array<
@@ -146,5 +160,191 @@ export class QuackRepository {
       },
     });
     return mapPrismaQuackToDomain(quack, createQuackData.userId);
+  }
+
+  async castPollVote(
+    pollId: string,
+    optionId: string,
+    userId: string,
+  ): Promise<PollVoteWriteResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findUnique({
+          where: { id: pollId },
+          select: {
+            status: true,
+            options: { where: { id: optionId }, select: { id: true } },
+          },
+        });
+
+        if (!poll) return 'poll-not-found';
+        if (poll.status === 'closed') return 'poll-closed';
+        if (poll.options.length === 0) return 'option-not-in-poll';
+
+        await transaction.pollVote.upsert({
+          where: { pollId_userId: { pollId, userId } },
+          create: { pollId, optionId, userId },
+          update: { optionId },
+        });
+
+        return 'ok';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async cancelPollVote(
+    pollId: string,
+    userId: string,
+  ): Promise<PollVoteWriteResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findUnique({
+          where: { id: pollId },
+          select: { status: true },
+        });
+
+        if (!poll) return 'poll-not-found';
+        if (poll.status === 'closed') return 'poll-closed';
+
+        await transaction.pollVote.deleteMany({ where: { pollId, userId } });
+        return 'ok';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async updatePoll(
+    pollId: string,
+    userId: string,
+    question: string,
+    options: Array<{ id?: string; label: string }>,
+  ): Promise<PollEditResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findUnique({
+          where: { id: pollId },
+          include: {
+            quack: { select: { userId: true } },
+            options: { include: { _count: { select: { votes: true } } } },
+          },
+        });
+
+        if (!poll) return 'poll-not-found';
+        if (poll.quack.userId !== userId) return 'forbidden';
+
+        const optionIds = options.flatMap((option) =>
+          option.id ? [option.id] : [],
+        );
+        if (
+          options.length < 2 ||
+          options.length > 6 ||
+          new Set(optionIds).size !== optionIds.length ||
+          options.some((option) =>
+            option.id
+              ? !poll.options.some((existing) => existing.id === option.id)
+              : false,
+          )
+        ) {
+          return 'invalid-options';
+        }
+
+        const normalizedLabels = options.map((option) =>
+          option.label.trim().toLowerCase(),
+        );
+        if (new Set(normalizedLabels).size !== normalizedLabels.length) {
+          return 'invalid-options';
+        }
+
+        const removedOptions = poll.options.filter(
+          (option) => !optionIds.includes(option.id),
+        );
+        if (removedOptions.some((option) => option._count.votes > 0)) {
+          return 'option-has-votes';
+        }
+
+        await transaction.poll.update({
+          where: { id: pollId },
+          data: { question: question.trim() },
+        });
+
+        if (removedOptions.length > 0) {
+          await transaction.pollOption.deleteMany({
+            where: { id: { in: removedOptions.map((option) => option.id) } },
+          });
+        }
+
+        await transaction.pollOption.updateMany({
+          where: { pollId },
+          data: { position: { increment: 100 } },
+        });
+
+        for (const [position, option] of options.entries()) {
+          if (option.id) {
+            await transaction.pollOption.update({
+              where: { id: option.id },
+              data: { label: option.label.trim(), position },
+            });
+          } else {
+            await transaction.pollOption.create({
+              data: { pollId, label: option.label.trim(), position },
+            });
+          }
+        }
+
+        return 'ok';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async setPollStatus(
+    pollId: string,
+    userId: string,
+    status: 'open' | 'closed',
+  ): Promise<PollStatusWriteResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const poll = await transaction.poll.findUnique({
+          where: { id: pollId },
+          include: { quack: { select: { userId: true } } },
+        });
+
+        if (!poll) return 'poll-not-found';
+        if (poll.quack.userId !== userId) return 'forbidden';
+
+        await transaction.poll.update({
+          where: { id: pollId },
+          data: { status },
+        });
+        return 'ok';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  async setQuackPollStatus(
+    quackId: string,
+    userId: string,
+    status: 'open' | 'closed',
+  ): Promise<PollStatusWriteResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const quack = await transaction.quack.findUnique({
+          where: { id: quackId },
+          select: { userId: true },
+        });
+
+        if (!quack) return 'quack-not-found';
+        if (quack.userId !== userId) return 'forbidden';
+
+        await transaction.poll.updateMany({
+          where: { quackId },
+          data: { status },
+        });
+        return 'ok';
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 }
