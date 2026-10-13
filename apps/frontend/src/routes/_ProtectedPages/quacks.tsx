@@ -40,6 +40,7 @@ function QuacksPage() {
 
         <QuackList
           quacks={quacksQuery.data ?? []}
+          viewerUserId={user?.id}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           isLoading={quacksQuery.isLoading}

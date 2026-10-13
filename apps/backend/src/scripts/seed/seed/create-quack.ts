@@ -15,7 +15,7 @@ export async function createQuack(
 ): Promise<Quack> {
   const { text, userId, createdAt } = params;
 
-  return await prisma.quack.create({
+  const quack = await prisma.quack.create({
     data: {
       text,
       createdAt,
@@ -26,4 +26,6 @@ export async function createQuack(
       },
     },
   });
+
+  return { ...quack, polls: [] };
 }

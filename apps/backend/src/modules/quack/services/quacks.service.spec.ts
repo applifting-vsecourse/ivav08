@@ -13,6 +13,7 @@ const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   userId: 'u1',
   createdAt: new Date('2026-01-01T12:00:00Z'),
   updatedAt: new Date('2026-01-01T12:00:00Z'),
+  polls: [],
   user: { id: 'u1', name: 'Caffeinated Duck', username: 'CaffeinatedDuck' },
   ...overrides,
 });
@@ -25,8 +26,8 @@ describe('QuacksService', () => {
 
     const service = new QuacksService(repository);
 
-    await expect(service.getQuacks()).resolves.toEqual(quacks);
-    expect(repository.getQuacks).toHaveBeenCalledTimes(1);
+    await expect(service.getQuacks(undefined, 'u1')).resolves.toEqual(quacks);
+    expect(repository.getQuacks).toHaveBeenCalledWith(undefined, 'u1');
   });
 
   it('forwards a normalized search term to the repository', async () => {
@@ -35,8 +36,8 @@ describe('QuacksService', () => {
 
     const service = new QuacksService(repository);
 
-    await expect(service.getQuacks('  pond  ')).resolves.toEqual([]);
-    expect(repository.getQuacks).toHaveBeenCalledWith('pond');
+    await expect(service.getQuacks('  pond  ', 'u1')).resolves.toEqual([]);
+    expect(repository.getQuacks).toHaveBeenCalledWith('pond', 'u1');
   });
 
   it('creates a quack owned by the signed-in user', async () => {
@@ -55,6 +56,38 @@ describe('QuacksService', () => {
       text: 'hello',
       mood: 'happy',
       userId: 'u1',
+      polls: [],
     });
+  });
+
+  it('creates a poll post without context text and normalizes its options', async () => {
+    const repository = mock<QuackRepository>();
+    repository.createQuack.mockResolvedValue(aQuack({ text: '', polls: [] }));
+    const service = new QuacksService(repository);
+    const user = { id: 'u1' } as Identity;
+
+    await service.createQuack(user, {
+      polls: [{ question: 'Where to eat?', options: ['Cafe', 'Park'] }],
+    });
+
+    expect(repository.createQuack).toHaveBeenCalledWith({
+      text: '',
+      mood: undefined,
+      userId: 'u1',
+      polls: [{ question: 'Where to eat?', options: ['Cafe', 'Park'] }],
+    });
+  });
+
+  it('rejects duplicate poll options after trim and case normalization', async () => {
+    const repository = mock<QuackRepository>();
+    const service = new QuacksService(repository);
+    const user = { id: 'u1' } as Identity;
+
+    await expect(
+      service.createQuack(user, {
+        polls: [{ question: 'Where to eat?', options: ['Cafe', ' cafe '] }],
+      }),
+    ).rejects.toThrow('Poll options must be unique');
+    expect(repository.createQuack).not.toHaveBeenCalled();
   });
 });

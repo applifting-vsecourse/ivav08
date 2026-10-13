@@ -30,6 +30,10 @@ The CLI puts `shadow-xs`/`shadow-sm` on inputs, textareas and cards. [`DESIGN.md
 
 When search must reach records beyond the currently rendered items, filter at the server/repository boundary. Normalize and include the search term in the TanStack Query key, debounce typeahead requests, and keep loading, no-match, and truly-empty states distinct.
 
+### Poll vote counts
+
+Enforce one vote per user and poll with a database unique constraint, and derive counts from persisted votes instead of maintaining counters. If results are private to some viewers, omit hidden counts from the API response rather than only hiding them in the UI.
+
 ### The app is already running
 
 Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it. Don't start a second instance, don't restart it, don't run `pnpm dev`.

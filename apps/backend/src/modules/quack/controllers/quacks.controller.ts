@@ -43,9 +43,10 @@ export class QuacksController {
   @ApiResponse({ status: 200, type: [QuackResponseDto] })
   @ApiResponse({ status: 401, description: 'Not signed in' })
   async list(
+    @User() user: Identity,
     @Query() query: SearchQuacksQueryDto,
   ): Promise<QuackResponseDto[]> {
-    const quacks = await this.quacksService.getQuacks(query.search);
+    const quacks = await this.quacksService.getQuacks(query.search, user.id);
     return quacks.map(QuackResponseDto.fromDomain);
   }
 
@@ -61,6 +62,7 @@ export class QuacksController {
     const quack = await this.quacksService.createQuack(user, {
       text: body.text,
       mood: body.mood,
+      polls: body.polls,
     });
     return QuackResponseDto.fromDomain(quack);
   }
