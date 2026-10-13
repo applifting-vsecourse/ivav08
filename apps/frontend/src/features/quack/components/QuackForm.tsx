@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
 import { useForm, useWatch } from "react-hook-form"
@@ -21,9 +22,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { QUACK_MOODS } from "@/lib/quack-moods"
 import { cn } from "@/lib/utils"
 
-import { QUACK_MOODS } from "@/features/quack/api/quackSchemas"
 import { useAddQuack } from "@/features/quack/hooks/useAddQuack"
 
 // Mirrors the server-side DTO (MaxLength(280)) so the user is told before
@@ -41,20 +42,28 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-type QuackFormProps = { className?: string }
+type QuackFormProps = { className?: string; defaultMood?: string }
 
-export function QuackForm({ className }: QuackFormProps) {
+export function QuackForm({ className, defaultMood }: QuackFormProps) {
   const addQuack = useAddQuack()
+  const selectedDefaultMood = QUACK_MOODS.find((mood) => mood === defaultMood)
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { text: "", mood: undefined },
+    defaultValues: { text: "", mood: selectedDefaultMood },
   })
+
+  useEffect(() => {
+    form.setValue("mood", selectedDefaultMood)
+  }, [form, selectedDefaultMood])
 
   const text = useWatch({ control: form.control, name: "text" })
   const length = text?.length ?? 0
 
   const handleSubmit = (values: FormValues) => {
-    addQuack.mutate({ text: values.text, mood: values.mood }, { onSuccess: () => form.reset() })
+    addQuack.mutate(
+      { text: values.text, mood: values.mood },
+      { onSuccess: () => form.reset({ text: "", mood: selectedDefaultMood }) },
+    )
   }
 
   return (
