@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Loader2 } from "lucide-react"
-import { useForm, useWatch } from "react-hook-form"
+import { Loader2, Plus, X } from "lucide-react"
+import { useFieldArray, useForm, useWatch, type UseFormReturn } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -14,6 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -30,15 +31,61 @@ import { useAddQuack } from "@/features/quack/hooks/useAddQuack"
 // Mirrors the server-side DTO (MaxLength(280)) so the user is told before
 // the request is made — the server still validates independently.
 const MAX_LENGTH = 280
+const MAX_POLLS = 3
+const MIN_OPTIONS = 2
+const MAX_OPTIONS = 6
+const MAX_OPTION_LENGTH = 80
 
-const schema = z.object({
-  text: z
-    .string()
-    .trim()
-    .min(1, "Write something first")
-    .max(MAX_LENGTH, `Keep it under ${MAX_LENGTH} characters`),
-  mood: z.enum(QUACK_MOODS).optional(),
-})
+const pollSchema = z
+  .object({
+    question: z
+      .string()
+      .trim()
+      .min(1, "A poll question is required")
+      .max(MAX_LENGTH, `Keep the question under ${MAX_LENGTH} characters`),
+    options: z
+      .array(
+        z.object({
+          text: z
+            .string()
+            .trim()
+            .min(1, "An answer is required")
+            .max(MAX_OPTION_LENGTH, `Keep answers under ${MAX_OPTION_LENGTH} characters`),
+        }),
+      )
+      .min(MIN_OPTIONS, "Add at least 2 answers")
+      .max(MAX_OPTIONS, "A poll can have no more than 6 answers"),
+  })
+  .superRefine((poll, context) => {
+    const seen = new Set<string>()
+    poll.options.forEach((option, index) => {
+      const normalized = option.text.trim().toLowerCase()
+      if (seen.has(normalized)) {
+        context.addIssue({
+          code: "custom",
+          path: ["options", index, "text"],
+          message: "Answers must be unique",
+        })
+      }
+      seen.add(normalized)
+    })
+  })
+
+const schema = z
+  .object({
+    text: z.string().trim().max(MAX_LENGTH, `Keep it under ${MAX_LENGTH} characters`),
+    mood: z.enum(QUACK_MOODS).optional(),
+    polls: z.array(pollSchema).max(MAX_POLLS, `A post can have no more than ${MAX_POLLS} polls`),
+  })
+  .superRefine((values, context) => {
+    if (!values.text && values.polls.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["text"],
+        message: "Write a post or add a poll",
+      })
+    }
+  })
 
 type FormValues = z.infer<typeof schema>
 
@@ -49,8 +96,9 @@ export function QuackForm({ className, defaultMood }: QuackFormProps) {
   const selectedDefaultMood = QUACK_MOODS.find((mood) => mood === defaultMood)
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { text: "", mood: selectedDefaultMood },
+    defaultValues: { text: "", mood: selectedDefaultMood, polls: [] },
   })
+  const polls = useFieldArray({ control: form.control, name: "polls" })
 
   useEffect(() => {
     form.setValue("mood", selectedDefaultMood)
@@ -61,8 +109,20 @@ export function QuackForm({ className, defaultMood }: QuackFormProps) {
 
   const handleSubmit = (values: FormValues) => {
     addQuack.mutate(
-      { text: values.text, mood: values.mood },
-      { onSuccess: () => form.reset({ text: "", mood: selectedDefaultMood }) },
+      {
+        text: values.text || undefined,
+        mood: values.mood,
+        polls:
+          values.polls.length > 0
+            ? values.polls.map((poll) => ({
+                question: poll.question,
+                options: poll.options.map((option) => option.text),
+              }))
+            : undefined,
+      },
+      {
+        onSuccess: () => form.reset({ text: "", mood: selectedDefaultMood, polls: [] }),
+      },
     )
   }
 
@@ -85,11 +145,11 @@ export function QuackForm({ className, defaultMood }: QuackFormProps) {
             name="text"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>New quack</FormLabel>
+                <FormLabel>Post context or text</FormLabel>
                 <FormControl>
                   <Textarea
                     rows={3}
-                    placeholder="Quack something..."
+                    placeholder="Add context, or leave blank for a poll-only post..."
                     disabled={addQuack.isPending}
                     {...field}
                   />
@@ -129,15 +189,41 @@ export function QuackForm({ className, defaultMood }: QuackFormProps) {
           />
         </div>
 
-        <div className="flex items-center justify-end gap-3">
-          <span
-            className={cn(
-              "text-sm",
-              length > MAX_LENGTH ? "text-destructive" : "text-muted-foreground",
-            )}
-          >
-            {length}/{MAX_LENGTH}
-          </span>
+        {polls.fields.map((poll, pollIndex) => (
+          <PollComposer
+            key={poll.id}
+            form={form}
+            pollIndex={pollIndex}
+            isDisabled={addQuack.isPending}
+            onRemove={() => polls.remove(pollIndex)}
+          />
+        ))}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span
+              className={cn(
+                "text-sm",
+                length > MAX_LENGTH ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {length}/{MAX_LENGTH}
+            </span>
+            {polls.fields.length < MAX_POLLS ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={addQuack.isPending}
+                onClick={() =>
+                  polls.append({ question: "", options: [{ text: "" }, { text: "" }] })
+                }
+              >
+                <Plus className="size-4" />
+                Add poll
+              </Button>
+            ) : null}
+          </div>
           <Button
             type="submit"
             size="sm"
@@ -149,5 +235,118 @@ export function QuackForm({ className, defaultMood }: QuackFormProps) {
         </div>
       </form>
     </Form>
+  )
+}
+
+function PollComposer({
+  form,
+  pollIndex,
+  isDisabled,
+  onRemove,
+}: {
+  form: UseFormReturn<FormValues>
+  pollIndex: number
+  isDisabled: boolean
+  onRemove: () => void
+}) {
+  const options = useFieldArray({
+    control: form.control,
+    name: `polls.${pollIndex}.options`,
+  })
+  const optionsError = form.formState.errors.polls?.[pollIndex]?.options?.message
+
+  return (
+    <fieldset className="space-y-3 border-t border-border pt-4">
+      <legend className="text-sm font-medium">Poll {pollIndex + 1}</legend>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Remove poll ${pollIndex + 1}`}
+          disabled={isDisabled}
+          onClick={onRemove}
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      <FormField
+        control={form.control}
+        name={`polls.${pollIndex}.question`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Poll question</FormLabel>
+            <FormControl>
+              <Textarea
+                rows={2}
+                maxLength={MAX_LENGTH}
+                disabled={isDisabled}
+                {...field}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <div className="space-y-2">
+        {options.fields.map((option, optionIndex) => (
+          <div
+            key={option.id}
+            className="flex items-start gap-2"
+          >
+            <FormField
+              control={form.control}
+              name={`polls.${pollIndex}.options.${optionIndex}.text`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="sr-only">Answer {optionIndex + 1}</FormLabel>
+                  <FormControl>
+                    <Input
+                      maxLength={MAX_OPTION_LENGTH}
+                      disabled={isDisabled}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove answer ${optionIndex + 1} from poll ${pollIndex + 1}`}
+              disabled={isDisabled || options.fields.length <= MIN_OPTIONS}
+              onClick={() => options.remove(optionIndex)}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        ))}
+        {optionsError ? (
+          <p
+            role="alert"
+            className="text-sm text-destructive"
+          >
+            {optionsError}
+          </p>
+        ) : null}
+      </div>
+
+      {options.fields.length < MAX_OPTIONS ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={isDisabled}
+          onClick={() => options.append({ text: "" })}
+        >
+          <Plus className="size-4" />
+          Add answer
+        </Button>
+      ) : null}
+    </fieldset>
   )
 }

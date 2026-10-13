@@ -9,6 +9,7 @@ import { QuackItem } from "@/features/quack/components/QuackItem"
 
 type QuackListProps = {
   quacks: Quack[]
+  viewerUserId?: string
   searchTerm: string
   onSearchChange: (searchTerm: string) => void
   isLoading?: boolean
@@ -18,6 +19,7 @@ type QuackListProps = {
 
 export function QuackList({
   quacks,
+  viewerUserId = "",
   searchTerm,
   onSearchChange,
   isLoading,
@@ -82,6 +84,7 @@ export function QuackList({
         <QuackItem
           key={quack.id}
           quack={quack}
+          viewerUserId={viewerUserId}
         />
       ))}
     </div>

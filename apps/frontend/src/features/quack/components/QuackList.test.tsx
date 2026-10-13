@@ -1,4 +1,5 @@
 // Example component test — the pattern to copy for your own components.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
@@ -13,12 +14,18 @@ const quack = (overrides: Partial<Quack> = {}): Quack => ({
   userId: "u1",
   createdAt: new Date("2026-01-01T12:00:00Z"),
   user: { id: "u1", name: "Caffeinated Duck", username: "CaffeinatedDuck" },
+  polls: [],
   ...overrides,
 })
 
+function renderList(ui: React.ReactNode) {
+  const queryClient = new QueryClient()
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
+
 describe("QuackList", () => {
   it("renders quacks with author info", () => {
-    render(
+    renderList(
       <QuackList
         quacks={[quack()]}
         searchTerm=""
@@ -32,7 +39,7 @@ describe("QuackList", () => {
   })
 
   it("shows a selected mood and omits the label when there is no mood", () => {
-    const { rerender } = render(
+    const { rerender } = renderList(
       <QuackList
         quacks={[quack({ mood: "silly" })]}
         searchTerm=""
@@ -43,18 +50,21 @@ describe("QuackList", () => {
     expect(screen.getByText("Silly")).toBeInTheDocument()
 
     rerender(
-      <QuackList
-        quacks={[quack()]}
-        searchTerm=""
-        onSearchChange={vi.fn()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <QuackList
+          quacks={[quack()]}
+          searchTerm=""
+          onSearchChange={vi.fn()}
+        />
+        ,
+      </QueryClientProvider>,
     )
     expect(screen.queryByText("Silly")).not.toBeInTheDocument()
   })
 
   it("passes changed search text to the parent", () => {
     const onSearchChange = vi.fn()
-    render(
+    renderList(
       <QuackList
         quacks={[quack()]}
         searchTerm=""
@@ -70,7 +80,7 @@ describe("QuackList", () => {
   })
 
   it("shows a search-specific empty state when nothing matches", () => {
-    render(
+    renderList(
       <QuackList
         quacks={[]}
         searchTerm="not here"
@@ -84,7 +94,7 @@ describe("QuackList", () => {
 
   it("shows an error with a working reload button", async () => {
     const onReload = vi.fn()
-    render(
+    renderList(
       <QuackList
         quacks={[]}
         searchTerm=""
