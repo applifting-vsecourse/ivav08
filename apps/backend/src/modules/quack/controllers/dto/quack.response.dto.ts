@@ -12,6 +12,40 @@ class QuackUserDto {
   username!: string;
 }
 
+class PollOptionResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  label!: string;
+
+  @ApiProperty()
+  position!: number;
+
+  @ApiProperty({ nullable: true })
+  voteCount!: number | null;
+}
+
+class PollResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  question!: string;
+
+  @ApiProperty({ enum: ['open', 'closed'] })
+  status!: 'open' | 'closed';
+
+  @ApiProperty()
+  resultsVisible!: boolean;
+
+  @ApiProperty({ nullable: true })
+  myVoteOptionId!: string | null;
+
+  @ApiProperty({ type: [PollOptionResponseDto] })
+  options!: PollOptionResponseDto[];
+}
+
 export class QuackResponseDto {
   @ApiProperty()
   id!: string;
@@ -34,6 +68,9 @@ export class QuackResponseDto {
   @ApiProperty({ type: QuackUserDto })
   user!: QuackUserDto;
 
+  @ApiProperty({ type: [PollResponseDto] })
+  polls!: PollResponseDto[];
+
   static fromDomain(quack: Quack): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
@@ -44,6 +81,14 @@ export class QuackResponseDto {
       id: quack.id,
       text: quack.text,
       mood: quack.mood,
+      polls: quack.polls.map((poll) => ({
+        id: poll.id,
+        question: poll.question,
+        status: poll.status,
+        resultsVisible: poll.resultsVisible,
+        myVoteOptionId: poll.myVoteOptionId,
+        options: poll.options,
+      })),
       userId: quack.userId,
       createdAt: quack.createdAt,
       user: {

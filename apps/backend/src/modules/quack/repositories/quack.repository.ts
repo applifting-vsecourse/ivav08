@@ -1,13 +1,25 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
 import {
+  Poll as PrismaPoll,
+  PollOption as PrismaPollOption,
   Quack as PrismaQuack,
   User as PrismaUser,
 } from '@/generated/prisma/client';
 import { Quack } from '@/modules/quack/domain/quack';
 import { Injectable } from '@nestjs/common';
 
+type PrismaPollWithOptions = PrismaPoll & {
+  options: Array<
+    PrismaPollOption & {
+      _count: { votes: number };
+      votes: Array<{ userId: string }>;
+    }
+  >;
+};
+
 const mapPrismaQuackToDomain = (
-  quack: PrismaQuack & { user?: PrismaUser },
+  quack: PrismaQuack & { user?: PrismaUser; polls?: PrismaPollWithOptions[] },
+  viewerUserId?: string,
 ): Quack => ({
   id: quack.id,
   text: quack.text,
@@ -15,6 +27,30 @@ const mapPrismaQuackToDomain = (
   userId: quack.userId,
   createdAt: quack.createdAt,
   updatedAt: quack.updatedAt,
+  polls: (quack.polls ?? []).map((poll) => {
+    const myVoteOptionId =
+      poll.options.find((option) =>
+        option.votes.some((vote) => vote.userId === viewerUserId),
+      )?.id ?? null;
+    const resultsVisible =
+      quack.userId === viewerUserId ||
+      myVoteOptionId !== null ||
+      poll.status === 'closed';
+
+    return {
+      id: poll.id,
+      question: poll.question,
+      status: poll.status,
+      resultsVisible,
+      myVoteOptionId,
+      options: poll.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        position: option.position,
+        voteCount: resultsVisible ? option._count.votes : null,
+      })),
+    };
+  }),
   user: quack.user
     ? {
         id: quack.user.id,
@@ -32,7 +68,7 @@ const mapPrismaQuackToDomain = (
 export class QuackRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getQuacks(search?: string): Promise<Quack[]> {
+  async getQuacks(search?: string, viewerUserId?: string): Promise<Quack[]> {
     const normalizedSearch = search?.trim();
     const searchFilter = normalizedSearch
       ? { contains: normalizedSearch, mode: 'insensitive' as const }
@@ -49,25 +85,66 @@ export class QuackRepository {
             },
           }
         : {}),
-      include: { user: true },
+      include: {
+        user: true,
+        polls: {
+          include: {
+            options: {
+              orderBy: { position: 'asc' },
+              include: {
+                _count: { select: { votes: true } },
+                votes: {
+                  where: viewerUserId ? { userId: viewerUserId } : undefined,
+                  select: { userId: true },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
-    return quacks.map(mapPrismaQuackToDomain);
+    return quacks.map((quack) => mapPrismaQuackToDomain(quack, viewerUserId));
   }
 
   async createQuack(createQuackData: {
     text: string;
     mood?: string;
     userId: string;
+    polls: Array<{ question: string; options: string[] }>;
   }): Promise<Quack> {
     const quack = await this.prisma.quack.create({
       data: {
         text: createQuackData.text,
         mood: createQuackData.mood ?? null,
         user: { connect: { id: createQuackData.userId } },
+        polls: {
+          create: createQuackData.polls.map((poll) => ({
+            question: poll.question.trim(),
+            options: {
+              create: poll.options.map((label, position) => ({
+                label: label.trim(),
+                position,
+              })),
+            },
+          })),
+        },
       },
-      include: { user: true },
+      include: {
+        user: true,
+        polls: {
+          include: {
+            options: {
+              orderBy: { position: 'asc' },
+              include: {
+                _count: { select: { votes: true } },
+                votes: { select: { userId: true } },
+              },
+            },
+          },
+        },
+      },
     });
-    return mapPrismaQuackToDomain(quack);
+    return mapPrismaQuackToDomain(quack, createQuackData.userId);
   }
 }
