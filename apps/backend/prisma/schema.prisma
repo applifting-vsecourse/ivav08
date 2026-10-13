@@ -22,17 +22,68 @@ enum UserRole {
   @@map("user_role")
 }
 
+enum PollStatus {
+  open
+  closed
+
+  @@map("poll_status")
+}
+
 model Quack {
   id        String   @id @default(cuid())
   text      String   @db.Text
   mood      String?  @db.VarChar(50)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  polls     Poll[]
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
   @@map("quack")
+}
+
+model Poll {
+  id        String       @id @default(cuid())
+  quackId   String
+  question  String       @db.VarChar(280)
+  status    PollStatus   @default(open)
+  quack     Quack        @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  options   PollOption[]
+  votes     PollVote[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([quackId])
+  @@map("poll")
+}
+
+model PollOption {
+  id       String     @id @default(cuid())
+  pollId   String
+  label    String     @db.VarChar(80)
+  position Int
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes    PollVote[]
+
+  @@unique([pollId, position])
+  @@map("poll_option")
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  pollId    String
+  optionId  String
+  userId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([pollId, userId])
+  @@index([optionId])
+  @@map("poll_vote")
 }
 
 model Session {
@@ -94,6 +145,7 @@ model User {
   sessions        Session[]
   accounts        Account[]
   quacks          Quack[]
+  pollVotes       PollVote[]
   role            UserRole  @default(user)
 
   username        String? @db.VarChar(50)
