@@ -1,4 +1,4 @@
-import { ROLES_KEY, Role } from '@/shared/auth/decorators/roles.decorator';
+import { Role, ROLES_KEY } from '@/shared/auth/decorators/roles.decorator';
 import { Identity } from '@/shared/auth/domain/identity';
 import {
   CanActivate,
