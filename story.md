@@ -22,13 +22,14 @@ As a moderator (a user with the `admin` role), I want to delete any quack, so th
 6. Regular users see no change: Delete only on their own quacks.
 7. Admin-only endpoints are protected with `@Roles('admin')` + `RolesGuard` (in `apps/backend/src/shared/auth/`), running after `AuthenticatedUserGuard`. First use: `GET /api/quacks/stats` (counts of quacks, polls, votes) → 200 for admins, 403 for regular users, 401 signed out.
 
+8. (Extra) Admins have a **Stats** item in the user menu that opens `/stats` with the number of quacks, polls and votes. Non-admins who open `/stats` are sent back to the feed (and the API answers them 403 anyway).
+
 ## Out of scope
 
 - A separate `moderator` role (would need a new `UserRole` enum value + migration).
 - A UI for assigning roles.
 - Reasons for removal, notifying the author, audit log, undo.
 - Banning users or hiding quacks instead of deleting.
-- A Stats page in the UI (the endpoint exists; the page is optional).
 
 ## Checks (three accounts + Swagger)
 

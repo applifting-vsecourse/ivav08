@@ -65,3 +65,14 @@ test("admin-only stats: 200 for an admin, 403 for a regular user", async ({ brow
   const user = await signedInPage(browser, USERS.deepDuckThoughts)
   expect((await user.request.get(`${API}/quacks/stats`)).status()).toBe(403)
 })
+
+test("the Stats page is for admins only", async ({ browser }) => {
+  const admin = await signedInPage(browser, USERS.admin)
+  await admin.goto("/stats")
+  await expect(admin.getByRole("heading", { name: "Stats" })).toBeVisible()
+  await expect(admin.getByText("Quacks", { exact: true })).toBeVisible()
+
+  const user = await signedInPage(browser, USERS.deepDuckThoughts)
+  await user.goto("/stats")
+  await expect(user).toHaveURL(/\/quacks/)
+})
