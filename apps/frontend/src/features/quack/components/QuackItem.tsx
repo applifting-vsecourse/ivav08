@@ -1,13 +1,25 @@
+import { useState } from "react"
+import { Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { formatDate } from "@/lib/date"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { PollCard } from "@/features/quack/components/PollCard"
 import { UsersName } from "@/features/quack/components/UsersName"
 import { UsersUserName } from "@/features/quack/components/UsersUserName"
+import { useDeleteQuack } from "@/features/quack/hooks/useDeleteQuack"
 import { usePollManagement } from "@/features/quack/hooks/usePollMutations"
 
 type QuackItemProps = { quack: Quack; viewerUserId?: string }
@@ -16,7 +28,11 @@ export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
   const { name, username } = quack.user
   const mood = quack.mood
   const management = usePollManagement()
+  const deleteQuack = useDeleteQuack()
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const isAuthor = quack.userId === viewerUserId
+  // Only a convenience: the server refuses the delete for anyone else anyway.
+  const canDelete = isAuthor
   const isAllPollsClosed =
     quack.polls.length > 0 && quack.polls.every((poll) => poll.status === "closed")
 
@@ -40,6 +56,18 @@ export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
     }
   }
 
+  const handleDelete = async () => {
+    try {
+      await deleteQuack.mutateAsync(quack.id)
+      setIsConfirmOpen(false)
+      toast.success("Quack deleted")
+    } catch (error) {
+      toast.error("Could not delete the quack", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    }
+  }
+
   return (
     <article className="flex w-full gap-4 border-b border-border pt-2 pb-4 last:border-b-0">
       <Avatar className="size-12">
@@ -53,6 +81,51 @@ export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
           </span>
           <span className="text-xs text-muted-foreground">·</span>
           <time className="text-xs text-muted-foreground">{formatDate(quack.createdAt)}</time>
+          {canDelete ? (
+            <Dialog
+              open={isConfirmOpen}
+              onOpenChange={setIsConfirmOpen}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto text-muted-foreground"
+                aria-label="Delete quack"
+                onClick={() => setIsConfirmOpen(true)}
+              >
+                <Trash2 />
+              </Button>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete this quack?</DialogTitle>
+                  <DialogDescription>
+                    It disappears from the feed for everyone, together with its polls and votes.
+                    This can&apos;t be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                  </DialogClose>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={deleteQuack.isPending}
+                    onClick={() => void handleDelete()}
+                  >
+                    {deleteQuack.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : null}
         </div>
         {quack.text ? (
           <p className="text-sm break-words whitespace-pre-line">{quack.text}</p>

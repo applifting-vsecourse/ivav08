@@ -1,36 +1,48 @@
-# Polls
+# Delete your own quacks and the "Mine" tab
 
 ## User story
 
-As a user who wants to collect answers to a question, I want to add polls to a post, see reliable vote counts, and change my vote so people can decide together without counting replies by hand.
+As a signed-in user, I want to delete quacks I posted and to see only my own quacks, so that I can take back a post I regret and quickly find what I wrote.
 
 ## Acceptance criteria
 
-### Creating polls
+### Deleting
 
-1. A post may contain up to three polls. Each poll has its own required question and 2–6 answer options. A poll question may be up to 280 characters; each option is required, up to 80 characters, and unique within that poll after trimming and case-insensitive comparison.
-2. A poll post may omit the ordinary post context. A post without polls still requires its ordinary text. The context and each question are separate fields.
-3. The author can edit poll questions and options, including after votes. Editing an existing option's text preserves votes for that option. An option with votes cannot be removed; an option without votes may be removed only if at least two options remain. Options may be added up to the six-option limit.
+1. Each of **my own** quacks shows a Delete action (a bin icon, labelled "Delete quack" for screen readers). Quacks by other people never show it.
+2. Clicking Delete opens a confirmation dialog ("Delete this quack?") with **Cancel** and **Delete**. Cancel (or Esc / clicking outside) closes it and nothing changes.
+3. Confirming deletes the quack. It disappears from every feed (All, Mine, search results) without a page reload, and stays gone after a reload. Its polls and votes are deleted with it.
+4. While the delete is in progress the Delete button is disabled and shows a spinner. On success a short "Quack deleted" toast appears; on failure an error toast explains what went wrong and the quack stays.
+5. The server enforces ownership, not just the UI:
+   - `DELETE /api/quacks/:id` for my own quack → **204**
+   - someone else's quack → **403**
+   - signed out → **401**
+   - a quack that does not exist → **404**
+6. The user is always taken from the session. No user id is sent in the URL or request body.
 
-### Voting and results
+### All / Mine
 
-4. Any signed-in user, including the post author, can cast one vote per poll. The database prevents more than one vote for the same user and poll.
-5. A user's vote persists across reloads. While a poll is open, a user can change their selected option or cancel their vote. A closed poll rejects new, changed, or cancelled votes.
-6. The author always sees current counts. Other users see answer counts only after they have voted. When a poll is closed, its counts become visible to everyone.
-7. Vote counts are derived from persisted votes and remain correct when concurrent users vote or change their votes.
-8. Selecting an answer updates the selection immediately. If the viewer is already allowed to see counts, the affected counts update optimistically. A first-time voter sees counts after the server confirms the vote. Success refreshes authoritative results; if the server rejects the vote, the UI restores the saved selection and any visible counts and shows an actionable error.
+7. Above the feed there are two tabs: **All** (default) and **Mine**.
+8. **Mine** shows only quacks written by the signed-in user, newest first. The filter is done on the server (`GET /api/quacks?mine=true`), so it also works together with search.
+9. When Mine is empty (and nothing is being searched), it says "You haven't posted any quacks yet. Yours will show up here." with a **Write your first quack** button that moves the cursor into the post form.
+10. When a search inside Mine finds nothing, the usual "No quacks match your search." is shown.
 
-### Closing and reopening
+### Unchanged
 
-9. The post author can close or reopen one poll or all polls on the post. Closing is not permanent; reopening allows voting again. After reopening, non-authors who have not voted no longer see counts.
-10. Closing or reopening a poll does not erase votes. Reopening and editing are available to the post author, including after a poll has been closed.
-
-### Empty and failure states
-
-11. A post with no poll renders as it does today. A poll with no votes shows zero counts to viewers allowed to see results. Voting, poll editing, and status changes that fail show an error without silently discarding the user's current draft or saved vote.
+11. Signed-out visitors still cannot reach the feed; they are redirected to the login page.
 
 ## Out of scope
 
-- Anonymous voting, multi-select, scheduled polls, automatic expiry, and percentage charts.
-- Deleting a poll or editing the ordinary post context after publishing.
-- Polls on existing posts through a separate attach flow; poll content is created with its post.
+- Editing quacks.
+- Undo / restoring a deleted quack (soft delete).
+- Moderators/admins deleting other people's quacks (separate story).
+- Remembering the selected tab in the URL or across reloads.
+- Viewing another user's quacks (profile pages).
+
+## Checks (in the browser)
+
+- [ ] Two windows, two accounts: Delete appears only on my own quacks.
+- [ ] Cancel in the dialog leaves the quack in place.
+- [ ] Confirm removes it immediately and after reload.
+- [ ] Swagger: `DELETE` someone else's quack → 403; signed out → 401.
+- [ ] Mine shows only my quacks; empty Mine shows the invitation; the button focuses the form.
+- [ ] No `userId` in any URL or request body (DevTools → Network).

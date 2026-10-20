@@ -82,23 +82,30 @@ const mapPrismaQuackToDomain = (
 export class QuackRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getQuacks(search?: string, viewerUserId?: string): Promise<Quack[]> {
+  async getQuacks(
+    search?: string,
+    viewerUserId?: string,
+    authorUserId?: string,
+  ): Promise<Quack[]> {
     const normalizedSearch = search?.trim();
     const searchFilter = normalizedSearch
       ? { contains: normalizedSearch, mode: 'insensitive' as const }
       : undefined;
-    const quacks = await this.prisma.quack.findMany({
+    const where: Prisma.QuackWhereInput = {
+      ...(authorUserId ? { userId: authorUserId } : {}),
       ...(searchFilter
         ? {
-            where: {
-              OR: [
-                { text: searchFilter },
-                { user: { is: { name: searchFilter } } },
-                { user: { is: { username: searchFilter } } },
-              ],
-            },
+            OR: [
+              { text: searchFilter },
+              { user: { is: { name: searchFilter } } },
+              { user: { is: { username: searchFilter } } },
+            ],
           }
         : {}),
+    };
+    const hasFilter = Object.keys(where).length > 0;
+    const quacks = await this.prisma.quack.findMany({
+      ...(hasFilter ? { where } : {}),
       include: {
         user: true,
         polls: {
@@ -160,6 +167,23 @@ export class QuackRepository {
       },
     });
     return mapPrismaQuackToDomain(quack, createQuackData.userId);
+  }
+
+  async findQuackAuthorId(quackId: string): Promise<string | null> {
+    const quack = await this.prisma.quack.findUnique({
+      where: { id: quackId },
+      select: { userId: true },
+    });
+    return quack?.userId ?? null;
+  }
+
+  async deleteQuack(quackId: string): Promise<void> {
+    // Polls and their options cascade with the quack, but a vote's option is
+    // ON DELETE RESTRICT — so remove the votes first, all in one transaction.
+    await this.prisma.$transaction([
+      this.prisma.pollVote.deleteMany({ where: { poll: { quackId } } }),
+      this.prisma.quack.delete({ where: { id: quackId } }),
+    ]);
   }
 
   async castPollVote(

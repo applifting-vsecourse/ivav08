@@ -22,6 +22,8 @@ export function useSignUp() {
         username: input.username,
         email: input.email,
         password: input.password,
+        // the e-mail verification link lands here instead of on a 404
+        callbackURL: `${window.location.origin}/quacks`,
       })
       if (error) throw new Error(error.message ?? "Sign up failed")
     },
