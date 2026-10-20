@@ -70,7 +70,7 @@ test("the Stats page is for admins only", async ({ browser }) => {
   const admin = await signedInPage(browser, USERS.admin)
   await admin.goto("/stats")
   await expect(admin.getByRole("heading", { name: "Stats" })).toBeVisible()
-  await expect(admin.getByText("Quacks", { exact: true })).toBeVisible()
+  await expect(admin.getByRole("main").getByText("Quacks", { exact: true })).toBeVisible()
 
   const user = await signedInPage(browser, USERS.deepDuckThoughts)
   await user.goto("/stats")
