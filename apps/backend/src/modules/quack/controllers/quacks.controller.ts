@@ -1,7 +1,9 @@
 import { QuacksService } from '@/modules/quack/services/quacks.service';
+import { Roles } from '@/shared/auth/decorators/roles.decorator';
 import { User } from '@/shared/auth/decorators/user.decorator';
 import { Identity } from '@/shared/auth/domain/identity';
 import { AuthenticatedUserGuard } from '@/shared/auth/guards/authenticated-user.guard';
+import { RolesGuard } from '@/shared/auth/guards/roles.guard';
 import {
   Body,
   Controller,
@@ -23,12 +25,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateQuackDto } from './dto/create-quack.dto';
+import { QuackStatsResponseDto } from './dto/quack-stats.response.dto';
 import { QuackResponseDto } from './dto/quack.response.dto';
 import { SearchQuacksQueryDto } from './dto/search-quacks-query.dto';
 
 @ApiTags('quacks')
 @Controller('quacks')
-@UseGuards(AuthenticatedUserGuard)
+// order matters: sign-in first (401), then the role check (403)
+@UseGuards(AuthenticatedUserGuard, RolesGuard)
 @ApiCookieAuth()
 @UsePipes(
   new ValidationPipe({
@@ -56,6 +60,17 @@ export class QuacksController {
     return quacks.map(QuackResponseDto.fromDomain);
   }
 
+  // Declared before any `:id` route — Nest matches routes in order.
+  @Get('stats')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Feed statistics (admins only)' })
+  @ApiResponse({ status: 200, type: QuackStatsResponseDto })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  @ApiResponse({ status: 403, description: 'Not an admin' })
+  async stats(): Promise<QuackStatsResponseDto> {
+    return this.quacksService.getStats();
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a quack' })
@@ -75,10 +90,12 @@ export class QuacksController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete one of your own quacks' })
+  @ApiOperation({
+    summary: 'Delete a quack (your own, or any quack if you are an admin)',
+  })
   @ApiResponse({ status: 204, description: 'Quack deleted' })
   @ApiResponse({ status: 401, description: 'Not signed in' })
-  @ApiResponse({ status: 403, description: 'Not your quack' })
+  @ApiResponse({ status: 403, description: 'Not your quack and not an admin' })
   @ApiResponse({ status: 404, description: 'Quack not found' })
   async delete(@User() user: Identity, @Param('id') id: string): Promise<void> {
     // the user comes from the session; the service decides if they may delete

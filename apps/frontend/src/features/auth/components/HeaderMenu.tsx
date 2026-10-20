@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { LogOut, Settings } from "lucide-react"
+import { BarChart3, LogOut, Settings } from "lucide-react"
 
 import { ROUTES } from "@/app/routes"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -69,6 +69,14 @@ export function HeaderMenu() {
             Settings
           </Link>
         </DropdownMenuItem>
+        {user.role === "admin" ? (
+          <DropdownMenuItem asChild>
+            <Link to={ROUTES.stats}>
+              <BarChart3 className="size-4" />
+              Stats
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => signOut.mutate()}

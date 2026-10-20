@@ -69,4 +69,18 @@ describe("QuackItem deletion", () => {
 
     expect(screen.queryByRole("button", { name: "Delete quack" })).not.toBeInTheDocument()
   })
+
+  it("shows the delete action to a moderator on someone else's quack", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <QuackItem
+          quack={quack}
+          viewerUserId="admin"
+          canModerate
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByRole("button", { name: "Delete quack" })).toBeInTheDocument()
+  })
 })

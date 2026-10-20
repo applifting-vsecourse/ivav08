@@ -1,48 +1,41 @@
-# Delete your own quacks and the "Mine" tab
+# Moderation: admins can delete any quack
+
+## Problem
+
+Someone keeps posting nasty quacks and the author won't delete them. The team needs a moderator who can remove any quack — and nothing more, for now.
 
 ## User story
 
-As a signed-in user, I want to delete quacks I posted and to see only my own quacks, so that I can take back a post I regret and quickly find what I wrote.
+As a moderator (a user with the `admin` role), I want to delete any quack, so that I can remove harmful posts when their author won't.
 
 ## Acceptance criteria
 
-### Deleting
-
-1. Each of **my own** quacks shows a Delete action (a bin icon, labelled "Delete quack" for screen readers). Quacks by other people never show it.
-2. Clicking Delete opens a confirmation dialog ("Delete this quack?") with **Cancel** and **Delete**. Cancel (or Esc / clicking outside) closes it and nothing changes.
-3. Confirming deletes the quack. It disappears from every feed (All, Mine, search results) without a page reload, and stays gone after a reload. Its polls and votes are deleted with it.
-4. While the delete is in progress the Delete button is disabled and shows a spinner. On success a short "Quack deleted" toast appears; on failure an error toast explains what went wrong and the quack stays.
-5. The server enforces ownership, not just the UI:
-   - `DELETE /api/quacks/:id` for my own quack → **204**
-   - someone else's quack → **403**
+1. The moderator is the existing `admin` role. Every user has exactly one role, `user` (default) or `admin`. Users cannot set or change their own role — the role is not accepted from sign-up, settings or any request body; it is changed only directly in the database (seed / Adminer).
+2. A signed-in admin sees the Delete action on **every** quack, not just their own.
+3. Deleting uses the same confirmation dialog. When an admin deletes someone else's quack, the dialog says so: "You are removing @username's quack as a moderator…".
+4. After confirming, the quack disappears for everyone (All, Mine, search), together with its polls and votes.
+5. The server decides, using the role from the session (`if (!isOwner && !isAdmin)` in `QuacksService.deleteQuack`):
+   - admin deletes anyone's quack → **204**
+   - author deletes their own quack → **204** (unchanged)
+   - regular user deletes someone else's quack → **403**
    - signed out → **401**
-   - a quack that does not exist → **404**
-6. The user is always taken from the session. No user id is sent in the URL or request body.
+6. Regular users see no change: Delete only on their own quacks.
+7. Admin-only endpoints are protected with `@Roles('admin')` + `RolesGuard` (in `apps/backend/src/shared/auth/`), running after `AuthenticatedUserGuard`. First use: `GET /api/quacks/stats` (counts of quacks, polls, votes) → 200 for admins, 403 for regular users, 401 signed out.
 
-### All / Mine
-
-7. Above the feed there are two tabs: **All** (default) and **Mine**.
-8. **Mine** shows only quacks written by the signed-in user, newest first. The filter is done on the server (`GET /api/quacks?mine=true`), so it also works together with search.
-9. When Mine is empty (and nothing is being searched), it says "You haven't posted any quacks yet. Yours will show up here." with a **Write your first quack** button that moves the cursor into the post form.
-10. When a search inside Mine finds nothing, the usual "No quacks match your search." is shown.
-
-### Unchanged
-
-11. Signed-out visitors still cannot reach the feed; they are redirected to the login page.
+8. (Extra) Admins have a **Stats** item in the user menu that opens `/stats` with the number of quacks, polls and votes. Non-admins who open `/stats` are sent back to the feed (and the API answers them 403 anyway).
 
 ## Out of scope
 
-- Editing quacks.
-- Undo / restoring a deleted quack (soft delete).
-- Moderators/admins deleting other people's quacks (separate story).
-- Remembering the selected tab in the URL or across reloads.
-- Viewing another user's quacks (profile pages).
+- A separate `moderator` role (would need a new `UserRole` enum value + migration).
+- A UI for assigning roles.
+- Reasons for removal, notifying the author, audit log, undo.
+- Banning users or hiding quacks instead of deleting.
 
-## Checks (in the browser)
+## Checks (three accounts + Swagger)
 
-- [ ] Two windows, two accounts: Delete appears only on my own quacks.
-- [ ] Cancel in the dialog leaves the quack in place.
-- [ ] Confirm removes it immediately and after reload.
-- [ ] Swagger: `DELETE` someone else's quack → 403; signed out → 401.
-- [ ] Mine shows only my quacks; empty Mine shows the invitation; the button focuses the form.
-- [ ] No `userId` in any URL or request body (DevTools → Network).
+- [ ] Admin (`admin@example.com` / `adminpassword`): Delete on every quack; deleting someone else's quack works.
+- [ ] Regular user A: Delete only on own quacks.
+- [ ] Regular user B: `DELETE /api/quacks/{A's quack}` in Swagger → 403.
+- [ ] Signed out: → 401.
+- [ ] `GET /api/quacks/stats`: admin 200, user 403.
+- [ ] E2E `moderation.spec.ts` passes, and fails when `isAdmin` is removed from the service check.

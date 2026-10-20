@@ -22,9 +22,14 @@ import { UsersUserName } from "@/features/quack/components/UsersUserName"
 import { useDeleteQuack } from "@/features/quack/hooks/useDeleteQuack"
 import { usePollManagement } from "@/features/quack/hooks/usePollMutations"
 
-type QuackItemProps = { quack: Quack; viewerUserId?: string }
+type QuackItemProps = {
+  quack: Quack
+  viewerUserId?: string
+  // admins may delete any quack (moderation); the server checks this again
+  canModerate?: boolean
+}
 
-export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
+export function QuackItem({ quack, viewerUserId = "", canModerate = false }: QuackItemProps) {
   const { name, username } = quack.user
   const mood = quack.mood
   const management = usePollManagement()
@@ -32,7 +37,7 @@ export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const isAuthor = quack.userId === viewerUserId
   // Only a convenience: the server refuses the delete for anyone else anyway.
-  const canDelete = isAuthor
+  const canDelete = isAuthor || canModerate
   const isAllPollsClosed =
     quack.polls.length > 0 && quack.polls.every((poll) => poll.status === "closed")
 
@@ -100,7 +105,9 @@ export function QuackItem({ quack, viewerUserId = "" }: QuackItemProps) {
                 <DialogHeader>
                   <DialogTitle>Delete this quack?</DialogTitle>
                   <DialogDescription>
-                    It disappears from the feed for everyone, together with its polls and votes.
+                    {isAuthor
+                      ? "It disappears from the feed for everyone, together with its polls and votes."
+                      : `You are removing @${username}'s quack as a moderator. It disappears for everyone, together with its polls and votes.`}{" "}
                     This can&apos;t be undone.
                   </DialogDescription>
                 </DialogHeader>

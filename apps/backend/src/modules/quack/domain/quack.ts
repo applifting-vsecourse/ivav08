@@ -30,3 +30,9 @@ export type QuackPollOption = {
   position: number;
   voteCount: number | null;
 };
+
+export type QuackStats = {
+  quackCount: number;
+  pollCount: number;
+  voteCount: number;
+};
