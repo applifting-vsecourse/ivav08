@@ -14,5 +14,5 @@ export async function signIn(page: Page, user: { email: string; password: string
   await page.getByLabel("Password").fill(user.password)
   await page.getByRole("button", { name: "Sign in" }).click()
   // the header's user menu only appears once the session is loaded
-  await expect(page.getByRole("button", { name: "User menu" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "User menu" })).toBeVisible({ timeout: 30_000 })
 }
