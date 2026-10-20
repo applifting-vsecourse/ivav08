@@ -33,4 +33,18 @@ describe("quacksQueryOptions", () => {
 
     expect(api.get).toHaveBeenCalledWith("quacks", { searchParams: undefined })
   })
+
+  it("asks only for the signed-in user's quacks on the Mine tab", async () => {
+    const queryClient = new QueryClient()
+
+    await queryClient.fetchQuery(quacksQueryOptions("", "mine"))
+
+    expect(api.get).toHaveBeenCalledWith("quacks", { searchParams: { mine: "true" } })
+  })
+
+  it("keeps All and Mine in separate cache entries", () => {
+    expect(quacksQueryOptions("pond", "all").queryKey).not.toEqual(
+      quacksQueryOptions("pond", "mine").queryKey,
+    )
+  })
 })

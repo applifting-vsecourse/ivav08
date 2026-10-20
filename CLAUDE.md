@@ -34,6 +34,10 @@ When search must reach records beyond the currently rendered items, filter at th
 
 Enforce one vote per user and poll with a database unique constraint, and derive counts from persisted votes instead of maintaining counters. If results are private to some viewers, omit hidden counts from the API response rather than only hiding them in the UI.
 
+### Permissions live on the server
+
+Every "may this user do this?" check (owner, role) belongs in the backend service or a guard — never only in React. Take the user from the session (`@User()`), never from a URL or body. Signed out → 401, signed in but not allowed → 403. Hiding a button in the UI is a convenience on top of that, and every permission gets an E2E test that calls the API directly and fails when the server check is removed.
+
 ### The app is already running
 
 Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it. Don't start a second instance, don't restart it, don't run `pnpm dev`.

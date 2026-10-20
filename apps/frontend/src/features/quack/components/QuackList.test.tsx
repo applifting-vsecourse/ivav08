@@ -110,4 +110,78 @@ describe("QuackList", () => {
     await userEvent.click(screen.getByRole("button", { name: /reload/i }))
     expect(onReload).toHaveBeenCalledOnce()
   })
+
+  it("offers Delete only on the viewer's own quacks", () => {
+    renderList(
+      <QuackList
+        quacks={[
+          quack({ id: "mine", text: "my quack" }),
+          quack({
+            id: "theirs",
+            text: "their quack",
+            userId: "u2",
+            user: { id: "u2", name: "Bread Critic", username: "BreadCritic" },
+          }),
+        ]}
+        viewerUserId="u1"
+        searchTerm=""
+        onSearchChange={vi.fn()}
+      />,
+    )
+
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete quack" })
+    expect(deleteButtons).toHaveLength(1)
+    expect(screen.getByText("my quack").closest("article")).toContainElement(deleteButtons[0]!)
+  })
+
+  it("asks for confirmation before deleting", async () => {
+    renderList(
+      <QuackList
+        quacks={[quack()]}
+        viewerUserId="u1"
+        searchTerm=""
+        onSearchChange={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete quack" }))
+
+    expect(screen.getByRole("dialog", { name: "Delete this quack?" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument()
+  })
+
+  it("switches between All and Mine", async () => {
+    const onScopeChange = vi.fn()
+    renderList(
+      <QuackList
+        quacks={[quack()]}
+        searchTerm=""
+        onSearchChange={vi.fn()}
+        scope="all"
+        onScopeChange={onScopeChange}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole("tab", { name: "Mine" }))
+
+    expect(onScopeChange).toHaveBeenCalledWith("mine")
+  })
+
+  it("invites the viewer to write their first quack when Mine is empty", async () => {
+    const onWriteFirst = vi.fn()
+    renderList(
+      <QuackList
+        quacks={[]}
+        searchTerm=""
+        onSearchChange={vi.fn()}
+        scope="mine"
+        onScopeChange={vi.fn()}
+        onWriteFirst={onWriteFirst}
+      />,
+    )
+
+    expect(screen.getByText(/You haven't posted any quacks yet/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Write your first quack" }))
+    expect(onWriteFirst).toHaveBeenCalledOnce()
+  })
 })

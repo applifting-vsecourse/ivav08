@@ -1,7 +1,12 @@
 import { Quack } from '@/modules/quack/domain/quack';
 import { QuackRepository } from '@/modules/quack/repositories/quack.repository';
 import { Identity } from '@/shared/auth/domain/identity';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 @Injectable()
 export class QuacksService {
@@ -10,11 +15,30 @@ export class QuacksService {
   async getQuacks(
     search: string | undefined,
     viewerUserId: string,
+    onlyMine = false,
   ): Promise<Quack[]> {
     return this.quackRepository.getQuacks(
       search?.trim() || undefined,
       viewerUserId,
+      // "Mine" is always the signed-in user — never a user id from the request
+      onlyMine ? viewerUserId : undefined,
     );
+  }
+
+  async deleteQuack(user: Identity, quackId: string): Promise<void> {
+    const authorId = await this.quackRepository.findQuackAuthorId(quackId);
+    if (!authorId) {
+      throw new NotFoundException('Quack not found');
+    }
+
+    // The ownership check lives here, on the server. Hiding the button in the
+    // UI is only a convenience — a direct API call must be refused too.
+    const isOwner = authorId === user.id;
+    if (!isOwner) {
+      throw new ForbiddenException('You can only delete your own quacks');
+    }
+
+    await this.quackRepository.deleteQuack(quackId);
   }
 
   async createQuack(

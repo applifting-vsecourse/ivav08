@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Seo } from "@/components/Seo"
 
 import { useSession } from "@/features/auth/hooks/useSession"
+import type { QuackFeedScope } from "@/features/quack/api/quackKeys"
 import { quacksQueryOptions } from "@/features/quack/api/quacksQueryOptions"
 import { QuackForm } from "@/features/quack/components/QuackForm"
 import { QuackList } from "@/features/quack/components/QuackList"
@@ -19,13 +20,20 @@ function QuacksPage() {
   const { user } = useSession()
   const [searchTerm, setSearchTerm] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [scope, setScope] = useState<QuackFeedScope>("all")
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setSearchQuery(searchTerm.trim()), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
   }, [searchTerm])
 
-  const quacksQuery = useQuery(quacksQueryOptions(searchQuery))
+  const quacksQuery = useQuery(quacksQueryOptions(searchQuery, scope))
+
+  // The post form sits right above the feed, so "write your first quack"
+  // just moves the cursor into it.
+  const focusQuackForm = () => {
+    document.querySelector<HTMLTextAreaElement>('textarea[name="text"]')?.focus()
+  }
 
   return (
     <>
@@ -48,6 +56,9 @@ function QuacksPage() {
           // Only the error state offers a retry — posting invalidates the list,
           // and refocusing the tab refetches it.
           onReload={() => void quacksQuery.refetch()}
+          scope={scope}
+          onScopeChange={setScope}
+          onWriteFirst={focusQuackForm}
         />
       </section>
     </>

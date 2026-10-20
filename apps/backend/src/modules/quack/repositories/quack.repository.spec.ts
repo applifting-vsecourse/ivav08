@@ -162,4 +162,31 @@ describe('QuackRepository', () => {
     });
     expect(voterView.polls[0].options[0].voteCount).toBe(3);
   });
+
+  it('narrows the feed to one author for the Mine tab, combined with search', async () => {
+    const prisma = mockDeep<PrismaService>();
+    prisma.quack.findMany.mockResolvedValue([]);
+    const repository = new QuackRepository(prisma);
+
+    await repository.getQuacks('pond', 'viewer', 'viewer');
+
+    expect(prisma.quack.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: 'viewer',
+          OR: [
+            { text: { contains: 'pond', mode: 'insensitive' } },
+            {
+              user: { is: { name: { contains: 'pond', mode: 'insensitive' } } },
+            },
+            {
+              user: {
+                is: { username: { contains: 'pond', mode: 'insensitive' } },
+              },
+            },
+          ],
+        },
+      }),
+    );
+  });
 });
