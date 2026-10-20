@@ -118,9 +118,7 @@ export function QuackList({
           </div>
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            {isSearching
-              ? "No quacks match your search."
-              : "No quacks yet. Post the first one."}
+            {isSearching ? "No quacks match your search." : "No quacks yet. Post the first one."}
           </p>
         )
       ) : null}

@@ -42,11 +42,7 @@ describe('QuacksService', () => {
     const service = new QuacksService(repository);
 
     await expect(service.getQuacks('  pond  ', 'u1')).resolves.toEqual([]);
-    expect(repository.getQuacks).toHaveBeenCalledWith(
-      'pond',
-      'u1',
-      undefined,
-    );
+    expect(repository.getQuacks).toHaveBeenCalledWith('pond', 'u1', undefined);
   });
 
   it('creates a quack owned by the signed-in user', async () => {
