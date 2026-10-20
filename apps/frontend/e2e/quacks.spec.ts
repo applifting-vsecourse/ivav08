@@ -69,6 +69,29 @@ test("nobody can delete someone else's quack", async ({ page }) => {
   expect(response.status()).toBe(403)
 })
 
+test("a quack whose poll already has votes can still be deleted", async ({ browser }) => {
+  const authorContext = await browser.newContext()
+  const author = await authorContext.newPage()
+  await signIn(author, USERS.caffeinatedDuck)
+  const created = await author.request.post(`${API}/quacks`, {
+    data: { text: `E2E poll ${Date.now()}`, polls: [{ question: "Lunch?", options: ["Pond", "Park"] }] },
+  })
+  expect(created.status()).toBe(201)
+  const quack = (await created.json()) as { id: string; polls: { id: string; options: { id: string }[] }[] }
+  const poll = quack.polls[0]!
+
+  const voterContext = await browser.newContext()
+  const voter = await voterContext.newPage()
+  await signIn(voter, USERS.deepDuckThoughts)
+  const vote = await voter.request.post(`${API}/polls/${poll.id}/vote`, {
+    data: { optionId: poll.options[0]!.id },
+  })
+  expect(vote.status()).toBe(200)
+
+  const deleted = await author.request.delete(`${API}/quacks/${quack.id}`)
+  expect(deleted.status()).toBe(204)
+})
+
 test("signed-out callers get 401 from the delete endpoint", async ({ request }) => {
   const response = await request.delete(`${API}/quacks/any-id`)
   expect(response.status()).toBe(401)
