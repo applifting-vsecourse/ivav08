@@ -131,6 +131,16 @@ describe('QuacksService', () => {
       expect(repository.deleteQuack).not.toHaveBeenCalled();
     });
 
+    it("lets an admin delete someone else's quack", async () => {
+      const repository = mock<QuackRepository>();
+      repository.findQuackAuthorId.mockResolvedValue('u1');
+      const service = new QuacksService(repository);
+      const admin = { id: 'admin1', role: 'admin' } as Identity;
+
+      await expect(service.deleteQuack(admin, 'q1')).resolves.toBeUndefined();
+      expect(repository.deleteQuack).toHaveBeenCalledWith('q1');
+    });
+
     it('returns not found for a quack that does not exist', async () => {
       const repository = mock<QuackRepository>();
       repository.findQuackAuthorId.mockResolvedValue(null);

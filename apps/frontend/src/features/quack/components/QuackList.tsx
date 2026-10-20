@@ -20,6 +20,7 @@ type QuackListProps = {
   scope?: QuackFeedScope
   onScopeChange?: (scope: QuackFeedScope) => void
   onWriteFirst?: () => void
+  canModerate?: boolean
 }
 
 const isFeedScope = (value: string): value is QuackFeedScope => value === "all" || value === "mine"
@@ -35,6 +36,7 @@ export function QuackList({
   scope = "all",
   onScopeChange,
   onWriteFirst,
+  canModerate = false,
 }: QuackListProps) {
   const isSearching = searchTerm.trim().length > 0
 
@@ -128,6 +130,7 @@ export function QuackList({
           key={quack.id}
           quack={quack}
           viewerUserId={viewerUserId}
+          canModerate={canModerate}
         />
       ))}
     </div>

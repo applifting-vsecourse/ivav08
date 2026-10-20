@@ -6,7 +6,7 @@ import {
   Quack as PrismaQuack,
   User as PrismaUser,
 } from '@/generated/prisma/client';
-import { Quack } from '@/modules/quack/domain/quack';
+import { Quack, QuackStats } from '@/modules/quack/domain/quack';
 import { Injectable } from '@nestjs/common';
 
 export type PollVoteWriteResult =
@@ -175,6 +175,15 @@ export class QuackRepository {
       select: { userId: true },
     });
     return quack?.userId ?? null;
+  }
+
+  async getStats(): Promise<QuackStats> {
+    const [quackCount, pollCount, voteCount] = await Promise.all([
+      this.prisma.quack.count(),
+      this.prisma.poll.count(),
+      this.prisma.pollVote.count(),
+    ]);
+    return { quackCount, pollCount, voteCount };
   }
 
   async deleteQuack(quackId: string): Promise<void> {

@@ -184,4 +184,27 @@ describe("QuackList", () => {
     await userEvent.click(screen.getByRole("button", { name: "Write your first quack" }))
     expect(onWriteFirst).toHaveBeenCalledOnce()
   })
+
+  it("lets a moderator delete anyone's quack", async () => {
+    renderList(
+      <QuackList
+        quacks={[
+          quack({
+            id: "theirs",
+            text: "nasty quack",
+            userId: "u2",
+            user: { id: "u2", name: "Bread Critic", username: "BreadCritic" },
+          }),
+        ]}
+        viewerUserId="admin1"
+        canModerate
+        searchTerm=""
+        onSearchChange={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete quack" }))
+
+    expect(screen.getByText(/removing @BreadCritic's quack as a moderator/)).toBeInTheDocument()
+  })
 })

@@ -59,6 +59,8 @@ function QuacksPage() {
           scope={scope}
           onScopeChange={setScope}
           onWriteFirst={focusQuackForm}
+          // only shows the Delete buttons — the API enforces the admin role itself
+          canModerate={user?.role === "admin"}
         />
       </section>
     </>

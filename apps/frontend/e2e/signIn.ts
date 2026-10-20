@@ -6,6 +6,7 @@ export const API = "http://localhost:4050/api"
 export const USERS = {
   caffeinatedDuck: { email: "caffeinatedduck@example.com", password: "password1" },
   deepDuckThoughts: { email: "deepduckthoughts@example.com", password: "password2" },
+  admin: { email: "admin@example.com", password: "adminpassword" },
 } as const
 
 export async function signIn(page: Page, user: { email: string; password: string }) {
