@@ -178,8 +178,12 @@ export class QuackRepository {
   }
 
   async deleteQuack(quackId: string): Promise<void> {
-    // polls, options and votes go with it (onDelete: Cascade in the schema)
-    await this.prisma.quack.delete({ where: { id: quackId } });
+    // Polls and their options cascade with the quack, but a vote's option is
+    // ON DELETE RESTRICT — so remove the votes first, all in one transaction.
+    await this.prisma.$transaction([
+      this.prisma.pollVote.deleteMany({ where: { poll: { quackId } } }),
+      this.prisma.quack.delete({ where: { id: quackId } }),
+    ]);
   }
 
   async castPollVote(

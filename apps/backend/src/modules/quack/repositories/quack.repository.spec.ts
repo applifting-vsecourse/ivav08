@@ -189,4 +189,17 @@ describe('QuackRepository', () => {
       }),
     );
   });
+
+  it('removes poll votes before the quack so RESTRICT on options cannot block it', async () => {
+    const prisma = mockDeep<PrismaService>();
+    const repository = new QuackRepository(prisma);
+
+    await repository.deleteQuack('q1');
+
+    expect(prisma.pollVote.deleteMany).toHaveBeenCalledWith({
+      where: { poll: { quackId: 'q1' } },
+    });
+    expect(prisma.quack.delete).toHaveBeenCalledWith({ where: { id: 'q1' } });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
 });
