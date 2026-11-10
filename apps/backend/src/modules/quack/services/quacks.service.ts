@@ -26,7 +26,9 @@ export class QuacksService {
   }
 
   async deleteQuack(user: Identity, quackId: string): Promise<void> {
-    const authorId = await this.quackRepository.findQuackAuthorId(quackId);
+    // A quack that is already deleted (a tombstone) counts as not found.
+    const authorId =
+      await this.quackRepository.findActiveQuackAuthorId(quackId);
     if (!authorId) {
       throw new NotFoundException('Quack not found');
     }
@@ -40,6 +42,7 @@ export class QuacksService {
       throw new ForbiddenException('You can only delete your own quacks');
     }
 
+    // ADR 0001: wipes the content and keeps the row for its replies.
     await this.quackRepository.deleteQuack(quackId);
   }
 

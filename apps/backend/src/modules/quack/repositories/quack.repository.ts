@@ -4,9 +4,15 @@ import {
   Poll as PrismaPoll,
   PollOption as PrismaPollOption,
   Quack as PrismaQuack,
+  Reply as PrismaReply,
   User as PrismaUser,
 } from '@/generated/prisma/client';
-import { Quack, QuackStats } from '@/modules/quack/domain/quack';
+import {
+  Quack,
+  QuackAuthor,
+  QuackReply,
+  QuackStats,
+} from '@/modules/quack/domain/quack';
 import { Injectable } from '@nestjs/common';
 
 export type PollVoteWriteResult =
@@ -31,17 +37,43 @@ type PrismaPollWithOptions = PrismaPoll & {
   >;
 };
 
+const mapPrismaUserToAuthor = (user: PrismaUser): QuackAuthor => ({
+  id: user.id,
+  name: user.name,
+  username: user.username ?? '',
+});
+
+const mapPrismaReplyToDomain = (
+  reply: PrismaReply & { user: PrismaUser },
+): QuackReply => ({
+  id: reply.id,
+  text: reply.text,
+  quackId: reply.quackId,
+  userId: reply.userId,
+  createdAt: reply.createdAt,
+  user: mapPrismaUserToAuthor(reply.user),
+});
+
 const mapPrismaQuackToDomain = (
-  quack: PrismaQuack & { user?: PrismaUser; polls?: PrismaPollWithOptions[] },
+  quack: PrismaQuack & {
+    user?: PrismaUser;
+    polls?: PrismaPollWithOptions[];
+    replies?: Array<PrismaReply & { user: PrismaUser }>;
+  },
   viewerUserId?: string,
-): Quack => ({
+): Quack => {
+  const isDeleted = Boolean(quack.deletedAt);
+  return {
   id: quack.id,
-  text: quack.text,
-  mood: quack.mood,
+  // A tombstone's content is already wiped in the database; never send it.
+  text: isDeleted ? '' : quack.text,
+  mood: isDeleted ? null : quack.mood,
   userId: quack.userId,
   createdAt: quack.createdAt,
   updatedAt: quack.updatedAt,
-  polls: (quack.polls ?? []).map((poll) => {
+  deleted: isDeleted,
+  replies: (quack.replies ?? []).map(mapPrismaReplyToDomain),
+  polls: (isDeleted ? [] : (quack.polls ?? [])).map((poll) => {
     const myVoteOptionId =
       poll.options.find((option) =>
         option.votes.some((vote) => vote.userId === viewerUserId),
@@ -65,14 +97,14 @@ const mapPrismaQuackToDomain = (
       })),
     };
   }),
-  user: quack.user
-    ? {
-        id: quack.user.id,
-        name: quack.user.name,
-        username: quack.user.username ?? '',
-      }
-    : undefined,
-});
+  user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
+  };
+};
+
+const replyInclude = {
+  include: { user: true },
+  orderBy: { createdAt: 'asc' as const },
+};
 
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.
@@ -91,23 +123,29 @@ export class QuackRepository {
     const searchFilter = normalizedSearch
       ? { contains: normalizedSearch, mode: 'insensitive' as const }
       : undefined;
-    const where: Prisma.QuackWhereInput = {
-      ...(authorUserId ? { userId: authorUserId } : {}),
-      ...(searchFilter
-        ? {
-            OR: [
-              { text: searchFilter },
-              { user: { is: { name: searchFilter } } },
-              { user: { is: { username: searchFilter } } },
-            ],
-          }
-        : {}),
-    };
-    const hasFilter = Object.keys(where).length > 0;
+    const isFiltered = Boolean(searchFilter) || Boolean(authorUserId);
+    const conditions: Prisma.QuackWhereInput[] = [
+      // ADR 0001: search and Mine never show deleted quacks; the plain feed
+      // keeps a deleted quack only as a placeholder for its replies.
+      isFiltered
+        ? { deletedAt: null }
+        : { OR: [{ deletedAt: null }, { replies: { some: {} } }] },
+    ];
+    if (authorUserId) conditions.push({ userId: authorUserId });
+    if (searchFilter) {
+      conditions.push({
+        OR: [
+          { text: searchFilter },
+          { user: { is: { name: searchFilter } } },
+          { user: { is: { username: searchFilter } } },
+        ],
+      });
+    }
     const quacks = await this.prisma.quack.findMany({
-      ...(hasFilter ? { where } : {}),
+      where: { AND: conditions },
       include: {
         user: true,
+        replies: replyInclude,
         polls: {
           include: {
             options: {
@@ -153,6 +191,7 @@ export class QuackRepository {
       },
       include: {
         user: true,
+        replies: replyInclude,
         polls: {
           include: {
             options: {
@@ -169,30 +208,69 @@ export class QuackRepository {
     return mapPrismaQuackToDomain(quack, createQuackData.userId);
   }
 
-  async findQuackAuthorId(quackId: string): Promise<string | null> {
+  /** Author of a quack that exists and is not deleted, otherwise null. */
+  async findActiveQuackAuthorId(quackId: string): Promise<string | null> {
     const quack = await this.prisma.quack.findUnique({
       where: { id: quackId },
-      select: { userId: true },
+      select: { userId: true, deletedAt: true },
     });
-    return quack?.userId ?? null;
+    if (!quack || quack.deletedAt) return null;
+    return quack.userId;
   }
 
   async getStats(): Promise<QuackStats> {
     const [quackCount, pollCount, voteCount] = await Promise.all([
-      this.prisma.quack.count(),
+      this.prisma.quack.count({ where: { deletedAt: null } }),
       this.prisma.poll.count(),
       this.prisma.pollVote.count(),
     ]);
     return { quackCount, pollCount, voteCount };
   }
 
+  /**
+   * ADR 0001: a deleted quack becomes a tombstone. The row stays so replies
+   * keep their parent, but its content is wiped in the same transaction.
+   * Votes go first because a vote's option is ON DELETE RESTRICT; options
+   * cascade with their poll.
+   */
   async deleteQuack(quackId: string): Promise<void> {
-    // Polls and their options cascade with the quack, but a vote's option is
-    // ON DELETE RESTRICT — so remove the votes first, all in one transaction.
     await this.prisma.$transaction([
       this.prisma.pollVote.deleteMany({ where: { poll: { quackId } } }),
-      this.prisma.quack.delete({ where: { id: quackId } }),
+      this.prisma.poll.deleteMany({ where: { quackId } }),
+      this.prisma.quack.update({
+        where: { id: quackId },
+        data: { text: '', mood: null, deletedAt: new Date() },
+      }),
     ]);
+  }
+
+  async createReply(data: {
+    quackId: string;
+    userId: string;
+    text: string;
+  }): Promise<QuackReply> {
+    const reply = await this.prisma.reply.create({
+      data: {
+        text: data.text,
+        quack: { connect: { id: data.quackId } },
+        user: { connect: { id: data.userId } },
+      },
+      include: { user: true },
+    });
+    return mapPrismaReplyToDomain(reply);
+  }
+
+  async findReplyAuthorId(replyId: string): Promise<string | null> {
+    const reply = await this.prisma.reply.findUnique({
+      where: { id: replyId },
+      select: { userId: true },
+    });
+    return reply?.userId ?? null;
+  }
+
+  /** Replies have nothing under them, so they are removed for real. */
+  async deleteReply(replyId: string): Promise<void> {
+    await this.prisma.reply.delete({ where: { id: replyId } });
   }
 
   async castPollVote(

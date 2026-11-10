@@ -28,7 +28,7 @@ export const seedDatabase = async (
   // Drop existing database data from all tables
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
+      'TRUNCATE TABLE "reply", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
     );
   } catch (error) {
     console.error('Error truncating tables:', error);
@@ -86,7 +86,12 @@ export const seedDatabase = async (
 
   // Listed oldest first. The feed sorts newest first, so the last entry here is
   // the one at the top of the screen.
-  const exampleQuacks: { author: User; minutesAgo: number; text: string }[] = [
+  const exampleQuacks: {
+    author: User;
+    minutesAgo: number;
+    text: string;
+    replies?: { author: User; minutesAgo: number; text: string }[];
+  }[] = [
     {
       author: pondAdmin,
       minutesAgo: 2870,
@@ -116,6 +121,18 @@ send help or more caffeine`,
       author: deepDuckThoughts,
       minutesAgo: 1495,
       text: `If a pond reflects the sky, is the sky just a very large and very shy pond?`,
+      replies: [
+        {
+          author: breadCritic,
+          minutesAgo: 1460,
+          text: 'The sky has never once thrown bread at me. Pond behaviour, if you ask me.',
+        },
+        {
+          author: caffeinatedDuck,
+          minutesAgo: 1300,
+          text: 'its 3am and i needed to hear this',
+        },
+      ],
     },
     {
       author: migrationSeason,
@@ -159,16 +176,33 @@ i fear i may have started something`,
       minutesAgo: 20,
       text: `The bread situation has been resolved. The swan has been spoken to.
 Please stop tagging me.`,
+      replies: [
+        {
+          author: breadCritic,
+          minutesAgo: 12,
+          text: 'Resolved for whom, exactly?',
+        },
+      ],
     },
   ];
 
   const now = Date.now();
 
-  for (const { author, minutesAgo, text } of exampleQuacks) {
-    await createQuack(prisma, {
+  for (const { author, minutesAgo, text, replies = [] } of exampleQuacks) {
+    const quack = await createQuack(prisma, {
       text,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
     });
+    for (const reply of replies) {
+      await prisma.reply.create({
+        data: {
+          text: reply.text,
+          quackId: quack.id,
+          userId: reply.author.id,
+          createdAt: new Date(now - reply.minutesAgo * MINUTE_IN_MS),
+        },
+      });
+    }
   }
 };

@@ -30,17 +30,38 @@ enum PollStatus {
 }
 
 model Quack {
-  id        String   @id @default(cuid())
-  text      String   @db.Text
-  mood      String?  @db.VarChar(50)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  text      String    @db.Text
+  mood      String?   @db.VarChar(50)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   polls     Poll[]
+  replies   Reply[]
   userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  /// Set when the author (or an admin) deletes the quack. The row stays as a
+  /// tombstone so replies keep their place, but text, mood and polls are wiped
+  /// in the same transaction. See docs/adr/0001-delete-content-as-tombstone.md.
+  deletedAt DateTime?
 
   @@index([userId])
   @@map("quack")
+}
+
+/// A reply belongs to its own author, not to the quack's author.
+/// Replies are flat (no replies to replies yet).
+model Reply {
+  id        String   @id @default(cuid())
+  text      String   @db.VarChar(280)
+  quackId   String
+  quack     Quack    @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([quackId, createdAt])
+  @@index([userId])
+  @@map("reply")
 }
 
 model Poll {
@@ -145,6 +166,7 @@ model User {
   sessions        Session[]
   accounts        Account[]
   quacks          Quack[]
+  replies         Reply[]
   pollVotes       PollVote[]
   role            UserRole  @default(user)
 

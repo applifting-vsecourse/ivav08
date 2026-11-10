@@ -10,37 +10,31 @@ describe('QuackRepository', () => {
 
     await repository.getQuacks('  Pond  ', 'viewer');
 
-    expect(prisma.quack.findMany).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { text: { contains: 'Pond', mode: 'insensitive' } },
-          { user: { is: { name: { contains: 'Pond', mode: 'insensitive' } } } },
-          {
-            user: {
-              is: { username: { contains: 'Pond', mode: 'insensitive' } },
-            },
-          },
-        ],
-      },
-      include: {
-        user: true,
-        polls: {
-          include: {
-            options: {
-              orderBy: { position: 'asc' },
-              include: {
-                _count: { select: { votes: true } },
-                votes: {
-                  where: { userId: 'viewer' },
-                  select: { userId: true },
+    expect(prisma.quack.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { deletedAt: null },
+            {
+              OR: [
+                { text: { contains: 'Pond', mode: 'insensitive' } },
+                {
+                  user: {
+                    is: { name: { contains: 'Pond', mode: 'insensitive' } },
+                  },
                 },
-              },
+                {
+                  user: {
+                    is: { username: { contains: 'Pond', mode: 'insensitive' } },
+                  },
+                },
+              ],
             },
-          },
+          ],
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
   });
 
   it('returns the complete feed for an empty search', async () => {
@@ -50,26 +44,19 @@ describe('QuackRepository', () => {
 
     await repository.getQuacks('   ', 'viewer');
 
-    expect(prisma.quack.findMany).toHaveBeenCalledWith({
-      include: {
-        user: true,
-        polls: {
-          include: {
-            options: {
-              orderBy: { position: 'asc' },
-              include: {
-                _count: { select: { votes: true } },
-                votes: {
-                  where: { userId: 'viewer' },
-                  select: { userId: true },
-                },
-              },
-            },
-          },
+    // ADR 0001: deleted quacks stay only as placeholders for their replies
+    expect(prisma.quack.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [{ OR: [{ deletedAt: null }, { replies: { some: {} } }] }],
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        include: expect.objectContaining({
+          user: true,
+          replies: { include: { user: true }, orderBy: { createdAt: 'asc' } },
+        }),
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
   });
 
   it('hides counts from a reader who has not voted', async () => {
@@ -173,16 +160,23 @@ describe('QuackRepository', () => {
     expect(prisma.quack.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          userId: 'viewer',
-          OR: [
-            { text: { contains: 'pond', mode: 'insensitive' } },
+          AND: [
+            { deletedAt: null },
+            { userId: 'viewer' },
             {
-              user: { is: { name: { contains: 'pond', mode: 'insensitive' } } },
-            },
-            {
-              user: {
-                is: { username: { contains: 'pond', mode: 'insensitive' } },
-              },
+              OR: [
+                { text: { contains: 'pond', mode: 'insensitive' } },
+                {
+                  user: {
+                    is: { name: { contains: 'pond', mode: 'insensitive' } },
+                  },
+                },
+                {
+                  user: {
+                    is: { username: { contains: 'pond', mode: 'insensitive' } },
+                  },
+                },
+              ],
             },
           ],
         },
@@ -190,16 +184,74 @@ describe('QuackRepository', () => {
     );
   });
 
-  it('removes poll votes before the quack so RESTRICT on options cannot block it', async () => {
+  it('turns a deleted quack into a tombstone instead of removing the row', async () => {
     const prisma = mockDeep<PrismaService>();
     const repository = new QuackRepository(prisma);
 
     await repository.deleteQuack('q1');
 
+    // votes first: a vote's option is ON DELETE RESTRICT
     expect(prisma.pollVote.deleteMany).toHaveBeenCalledWith({
       where: { poll: { quackId: 'q1' } },
     });
-    expect(prisma.quack.delete).toHaveBeenCalledWith({ where: { id: 'q1' } });
+    expect(prisma.poll.deleteMany).toHaveBeenCalledWith({
+      where: { quackId: 'q1' },
+    });
+    expect(prisma.quack.update).toHaveBeenCalledWith({
+      where: { id: 'q1' },
+      data: { text: '', mood: null, deletedAt: expect.any(Date) },
+    });
+    expect(prisma.quack.delete).not.toHaveBeenCalled();
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('never sends the content of a deleted quack, but keeps its replies', async () => {
+    const prisma = mockDeep<PrismaService>();
+    const user = {
+      id: 'u1',
+      name: 'Caffeinated Duck',
+      username: 'CaffeinatedDuck',
+    };
+    prisma.quack.findMany.mockResolvedValue([
+      {
+        id: 'q1',
+        text: 'should never leave the database',
+        mood: 'happy',
+        userId: 'u1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: new Date(),
+        user,
+        polls: [],
+        replies: [
+          {
+            id: 'r1',
+            text: 'a reply',
+            quackId: 'q1',
+            userId: 'u2',
+            createdAt: new Date(),
+            user: { ...user, id: 'u2', username: 'DeepDuckThoughts' },
+          },
+        ],
+      },
+    ] as never);
+    const repository = new QuackRepository(prisma);
+
+    const [quack] = await repository.getQuacks(undefined, 'viewer');
+
+    expect(quack).toMatchObject({ deleted: true, text: '', mood: null });
+    expect(quack.replies).toHaveLength(1);
+    expect(quack.replies[0]).toMatchObject({ id: 'r1', text: 'a reply' });
+  });
+
+  it('treats a deleted quack as not found when looking up its author', async () => {
+    const prisma = mockDeep<PrismaService>();
+    prisma.quack.findUnique.mockResolvedValue({
+      userId: 'u1',
+      deletedAt: new Date(),
+    } as never);
+    const repository = new QuackRepository(prisma);
+
+    await expect(repository.findActiveQuackAuthorId('q1')).resolves.toBeNull();
   });
 });
