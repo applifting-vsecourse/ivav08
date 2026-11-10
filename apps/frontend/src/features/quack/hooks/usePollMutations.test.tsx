@@ -23,6 +23,8 @@ const quack: Quack = {
   userId: "author",
   createdAt: new Date("2026-01-01T12:00:00Z"),
   user: { id: "author", name: "Author", username: "author" },
+  deleted: false,
+  replies: [],
   polls: [
     {
       id: "p1",
