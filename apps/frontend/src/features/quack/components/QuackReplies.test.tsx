@@ -100,7 +100,12 @@ describe("QuackItem replies", () => {
 
   it("shows a deleted quack only as a placeholder for its replies", () => {
     renderItem(
-      aQuack({ deleted: true, text: "", user: { id: "u1", name: "Gone", username: "gone" }, replies: [reply] }),
+      aQuack({
+        deleted: true,
+        text: "",
+        user: { id: "u1", name: "Gone", username: "gone" },
+        replies: [reply],
+      }),
       "u1",
     )
 

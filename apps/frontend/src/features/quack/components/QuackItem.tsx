@@ -61,11 +61,7 @@ export function QuackItem({
 
 // ADR 0001: a deleted quack is only a placeholder for the replies under it –
 // no author, no text, no polls, no actions.
-function DeletedQuackItem({
-  quack,
-  viewerUserId,
-  canModerate,
-}: Omit<QuackItemProps, "canReply">) {
+function DeletedQuackItem({ quack, viewerUserId, canModerate }: Omit<QuackItemProps, "canReply">) {
   return (
     <article
       aria-label="Deleted quack"

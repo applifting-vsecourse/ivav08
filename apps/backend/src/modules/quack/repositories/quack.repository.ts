@@ -64,40 +64,40 @@ const mapPrismaQuackToDomain = (
 ): Quack => {
   const isDeleted = Boolean(quack.deletedAt);
   return {
-  id: quack.id,
-  // A tombstone's content is already wiped in the database; never send it.
-  text: isDeleted ? '' : quack.text,
-  mood: isDeleted ? null : quack.mood,
-  userId: quack.userId,
-  createdAt: quack.createdAt,
-  updatedAt: quack.updatedAt,
-  deleted: isDeleted,
-  replies: (quack.replies ?? []).map(mapPrismaReplyToDomain),
-  polls: (isDeleted ? [] : (quack.polls ?? [])).map((poll) => {
-    const myVoteOptionId =
-      poll.options.find((option) =>
-        option.votes.some((vote) => vote.userId === viewerUserId),
-      )?.id ?? null;
-    const resultsVisible =
-      quack.userId === viewerUserId ||
-      myVoteOptionId !== null ||
-      poll.status === 'closed';
+    id: quack.id,
+    // A tombstone's content is already wiped in the database; never send it.
+    text: isDeleted ? '' : quack.text,
+    mood: isDeleted ? null : quack.mood,
+    userId: quack.userId,
+    createdAt: quack.createdAt,
+    updatedAt: quack.updatedAt,
+    deleted: isDeleted,
+    replies: (quack.replies ?? []).map(mapPrismaReplyToDomain),
+    polls: (isDeleted ? [] : (quack.polls ?? [])).map((poll) => {
+      const myVoteOptionId =
+        poll.options.find((option) =>
+          option.votes.some((vote) => vote.userId === viewerUserId),
+        )?.id ?? null;
+      const resultsVisible =
+        quack.userId === viewerUserId ||
+        myVoteOptionId !== null ||
+        poll.status === 'closed';
 
-    return {
-      id: poll.id,
-      question: poll.question,
-      status: poll.status,
-      resultsVisible,
-      myVoteOptionId,
-      options: poll.options.map((option) => ({
-        id: option.id,
-        label: option.label,
-        position: option.position,
-        voteCount: resultsVisible ? option._count.votes : null,
-      })),
-    };
-  }),
-  user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
+      return {
+        id: poll.id,
+        question: poll.question,
+        status: poll.status,
+        resultsVisible,
+        myVoteOptionId,
+        options: poll.options.map((option) => ({
+          id: option.id,
+          label: option.label,
+          position: option.position,
+          voteCount: resultsVisible ? option._count.votes : null,
+        })),
+      };
+    }),
+    user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
   };
 };
 
