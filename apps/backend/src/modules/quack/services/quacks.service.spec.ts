@@ -14,7 +14,9 @@ const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   userId: 'u1',
   createdAt: new Date('2026-01-01T12:00:00Z'),
   updatedAt: new Date('2026-01-01T12:00:00Z'),
+  deleted: false,
   polls: [],
+  replies: [],
   user: { id: 'u1', name: 'Caffeinated Duck', username: 'CaffeinatedDuck' },
   ...overrides,
 });
@@ -113,7 +115,7 @@ describe('QuacksService', () => {
 
     it('lets the author delete their own quack', async () => {
       const repository = mock<QuackRepository>();
-      repository.findQuackAuthorId.mockResolvedValue('u1');
+      repository.findActiveQuackAuthorId.mockResolvedValue('u1');
       const service = new QuacksService(repository);
 
       await expect(service.deleteQuack(owner, 'q1')).resolves.toBeUndefined();
@@ -122,7 +124,7 @@ describe('QuacksService', () => {
 
     it("refuses to delete someone else's quack", async () => {
       const repository = mock<QuackRepository>();
-      repository.findQuackAuthorId.mockResolvedValue('u1');
+      repository.findActiveQuackAuthorId.mockResolvedValue('u1');
       const service = new QuacksService(repository);
 
       await expect(service.deleteQuack(someoneElse, 'q1')).rejects.toThrow(
@@ -133,7 +135,7 @@ describe('QuacksService', () => {
 
     it("lets an admin delete someone else's quack", async () => {
       const repository = mock<QuackRepository>();
-      repository.findQuackAuthorId.mockResolvedValue('u1');
+      repository.findActiveQuackAuthorId.mockResolvedValue('u1');
       const service = new QuacksService(repository);
       const admin = { id: 'admin1', role: 'admin' } as Identity;
 
@@ -141,9 +143,9 @@ describe('QuacksService', () => {
       expect(repository.deleteQuack).toHaveBeenCalledWith('q1');
     });
 
-    it('returns not found for a quack that does not exist', async () => {
+    it('returns not found for a quack that does not exist or is already deleted', async () => {
       const repository = mock<QuackRepository>();
-      repository.findQuackAuthorId.mockResolvedValue(null);
+      repository.findActiveQuackAuthorId.mockResolvedValue(null);
       const service = new QuacksService(repository);
 
       await expect(service.deleteQuack(owner, 'missing')).rejects.toThrow(

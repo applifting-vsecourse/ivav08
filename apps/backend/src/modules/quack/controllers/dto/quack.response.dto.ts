@@ -1,4 +1,4 @@
-import { Quack } from '@/modules/quack/domain/quack';
+import { Quack, QuackReply } from '@/modules/quack/domain/quack';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class QuackUserDto {
@@ -46,6 +46,41 @@ class PollResponseDto {
   options!: PollOptionResponseDto[];
 }
 
+export class ReplyResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  text!: string;
+
+  @ApiProperty()
+  quackId!: string;
+
+  @ApiProperty()
+  userId!: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: Date;
+
+  @ApiProperty({ type: QuackUserDto })
+  user!: QuackUserDto;
+
+  static fromDomain(reply: QuackReply): ReplyResponseDto {
+    return {
+      id: reply.id,
+      text: reply.text,
+      quackId: reply.quackId,
+      userId: reply.userId,
+      createdAt: reply.createdAt,
+      user: {
+        id: reply.user.id,
+        name: reply.user.name,
+        username: reply.user.username,
+      },
+    };
+  }
+}
+
 export class QuackResponseDto {
   @ApiProperty()
   id!: string;
@@ -71,6 +106,15 @@ export class QuackResponseDto {
   @ApiProperty({ type: [PollResponseDto] })
   polls!: PollResponseDto[];
 
+  @ApiProperty({
+    description:
+      'Deleted quack kept as a placeholder for its replies: text is empty, mood null, polls empty (ADR 0001)',
+  })
+  deleted!: boolean;
+
+  @ApiProperty({ type: () => [ReplyResponseDto] })
+  replies!: ReplyResponseDto[];
+
   static fromDomain(quack: Quack): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
@@ -91,6 +135,8 @@ export class QuackResponseDto {
       })),
       userId: quack.userId,
       createdAt: quack.createdAt,
+      deleted: quack.deleted,
+      replies: quack.replies.map((reply) => ReplyResponseDto.fromDomain(reply)),
       user: {
         id: quack.user.id,
         name: quack.user.name,

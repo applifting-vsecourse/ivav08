@@ -131,6 +131,7 @@ export function QuackList({
           quack={quack}
           viewerUserId={viewerUserId}
           canModerate={canModerate}
+          canReply
         />
       ))}
     </div>

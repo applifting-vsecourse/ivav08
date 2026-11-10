@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Loader2, Trash2 } from "lucide-react"
+import { Loader2, MessageCircle, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -17,6 +17,8 @@ import { formatDate } from "@/lib/date"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { PollCard } from "@/features/quack/components/PollCard"
+import { ReplyForm } from "@/features/quack/components/ReplyForm"
+import { ReplyList } from "@/features/quack/components/ReplyList"
 import { UsersName } from "@/features/quack/components/UsersName"
 import { UsersUserName } from "@/features/quack/components/UsersUserName"
 import { useDeleteQuack } from "@/features/quack/hooks/useDeleteQuack"
@@ -27,10 +29,68 @@ type QuackItemProps = {
   viewerUserId?: string
   // admins may delete any quack (moderation); the server checks this again
   canModerate?: boolean
+  // off on the static landing-page preview
+  canReply?: boolean
 }
 
-export function QuackItem({ quack, viewerUserId = "", canModerate = false }: QuackItemProps) {
+export function QuackItem({
+  quack,
+  viewerUserId = "",
+  canModerate = false,
+  canReply = false,
+}: QuackItemProps) {
+  if (quack.deleted) {
+    return (
+      <DeletedQuackItem
+        quack={quack}
+        viewerUserId={viewerUserId}
+        canModerate={canModerate}
+      />
+    )
+  }
+
+  return (
+    <LiveQuackItem
+      quack={quack}
+      viewerUserId={viewerUserId}
+      canModerate={canModerate}
+      canReply={canReply}
+    />
+  )
+}
+
+// ADR 0001: a deleted quack is only a placeholder for the replies under it –
+// no author, no text, no polls, no actions.
+function DeletedQuackItem({ quack, viewerUserId, canModerate }: Omit<QuackItemProps, "canReply">) {
+  return (
+    <article
+      aria-label="Deleted quack"
+      className="flex w-full gap-4 border-b border-border pt-2 pb-4 last:border-b-0"
+    >
+      <div
+        aria-hidden="true"
+        className="size-12 shrink-0 rounded-full border border-dashed border-border"
+      />
+      <div className="flex flex-1 flex-col gap-1">
+        <p className="text-sm text-muted-foreground italic">This quack was deleted.</p>
+        <ReplyList
+          replies={quack.replies}
+          viewerUserId={viewerUserId}
+          canModerate={canModerate}
+        />
+      </div>
+    </article>
+  )
+}
+
+function LiveQuackItem({
+  quack,
+  viewerUserId = "",
+  canModerate = false,
+  canReply = false,
+}: QuackItemProps) {
   const { name, username } = quack.user
+  const [isReplying, setIsReplying] = useState(false)
   const mood = quack.mood
   const management = usePollManagement()
   const deleteQuack = useDeleteQuack()
@@ -106,8 +166,8 @@ export function QuackItem({ quack, viewerUserId = "", canModerate = false }: Qua
                   <DialogTitle>Delete this quack?</DialogTitle>
                   <DialogDescription>
                     {isAuthor
-                      ? "It disappears from the feed for everyone, together with its polls and votes."
-                      : `You are removing @${username}'s quack as a moderator. It disappears for everyone, together with its polls and votes.`}{" "}
+                      ? "Its text, mood, polls and votes are removed for everyone. Replies from others stay under a “deleted” placeholder."
+                      : `You are removing @${username}'s quack as a moderator. Its text, mood, polls and votes are removed for everyone; replies stay.`}{" "}
                     This can&apos;t be undone.
                   </DialogDescription>
                 </DialogHeader>
@@ -163,6 +223,30 @@ export function QuackItem({ quack, viewerUserId = "", canModerate = false }: Qua
             viewerUserId={viewerUserId}
           />
         ))}
+        <ReplyList
+          replies={quack.replies}
+          viewerUserId={viewerUserId}
+          canModerate={canModerate}
+        />
+        {canReply && !isReplying ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-fit text-muted-foreground"
+            onClick={() => setIsReplying(true)}
+          >
+            <MessageCircle />
+            Reply
+            {quack.replies.length > 0 ? ` · ${quack.replies.length}` : null}
+          </Button>
+        ) : null}
+        {canReply && isReplying ? (
+          <ReplyForm
+            quackId={quack.id}
+            onDone={() => setIsReplying(false)}
+          />
+        ) : null}
       </div>
     </article>
   )

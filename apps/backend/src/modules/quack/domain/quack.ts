@@ -11,8 +11,20 @@ export type Quack = {
   userId: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Tombstone: the content (text, mood, polls) has been wiped. ADR 0001. */
+  deleted: boolean;
   polls: QuackPoll[];
+  replies: QuackReply[];
   user?: QuackAuthor;
+};
+
+export type QuackReply = {
+  id: string;
+  text: string;
+  quackId: string;
+  userId: string;
+  createdAt: Date;
+  user: QuackAuthor;
 };
 
 export type QuackPoll = {

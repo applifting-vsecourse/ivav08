@@ -52,7 +52,8 @@ test("the admin sees Delete on every quack", async ({ page }) => {
   await signIn(page, USERS.admin)
   await page.goto("/quacks")
 
-  const articles = page.getByRole("article")
+  // deleted quacks (ADR 0001 placeholders) have no actions of their own
+  const articles = page.getByRole("article").filter({ hasNotText: "This quack was deleted." })
   await expect(articles.first()).toBeVisible()
   const total = await articles.count()
   await expect(articles.getByRole("button", { name: "Delete quack" })).toHaveCount(total)
