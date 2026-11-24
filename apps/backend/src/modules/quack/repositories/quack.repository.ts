@@ -10,6 +10,7 @@ import {
 import {
   Quack,
   QuackAuthor,
+  QuackLikes,
   QuackReply,
   QuackStats,
 } from '@/modules/quack/domain/quack';
@@ -59,6 +60,8 @@ const mapPrismaQuackToDomain = (
     user?: PrismaUser;
     polls?: PrismaPollWithOptions[];
     replies?: Array<PrismaReply & { user: PrismaUser }>;
+    _count?: { likes: number };
+    likes?: Array<{ userId: string }>;
   },
   viewerUserId?: string,
 ): Quack => {
@@ -73,6 +76,13 @@ const mapPrismaQuackToDomain = (
     updatedAt: quack.updatedAt,
     deleted: isDeleted,
     replies: (quack.replies ?? []).map(mapPrismaReplyToDomain),
+    // ADR 0002: counted from the like rows. A tombstone's likes are wiped
+    // with its content, so it always shows 0.
+    likeCount: isDeleted ? 0 : (quack._count?.likes ?? 0),
+    likedByMe:
+      !isDeleted &&
+      viewerUserId !== undefined &&
+      (quack.likes ?? []).some((like) => like.userId === viewerUserId),
     polls: (isDeleted ? [] : (quack.polls ?? [])).map((poll) => {
       const myVoteOptionId =
         poll.options.find((option) =>
@@ -105,6 +115,16 @@ const replyInclude = {
   include: { user: true },
   orderBy: { createdAt: 'asc' as const },
 };
+
+/** Like count plus the viewer's own like (if any) — ADR 0002. */
+const likesInclude = (viewerUserId?: string) => ({
+  _count: { select: { likes: true as const } },
+  likes: {
+    // without a viewer there is no "my like" to look for
+    where: { userId: viewerUserId ?? '' },
+    select: { userId: true as const },
+  },
+});
 
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.
@@ -146,6 +166,7 @@ export class QuackRepository {
       include: {
         user: true,
         replies: replyInclude,
+        ...likesInclude(viewerUserId),
         polls: {
           include: {
             options: {
@@ -192,6 +213,7 @@ export class QuackRepository {
       include: {
         user: true,
         replies: replyInclude,
+        ...likesInclude(createQuackData.userId),
         polls: {
           include: {
             options: {
@@ -218,6 +240,58 @@ export class QuackRepository {
     return quack.userId;
   }
 
+  /**
+   * Saves the user's like (at most one per user — unique constraint) and
+   * returns the quack's like state, or null when the quack doesn't exist or
+   * is deleted. Serializable, so a like can't slip in while the quack is
+   * being deleted.
+   */
+  async addLike(quackId: string, userId: string): Promise<QuackLikes | null> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const quack = await transaction.quack.findUnique({
+          where: { id: quackId },
+          select: { deletedAt: true },
+        });
+        if (!quack || quack.deletedAt) return null;
+
+        await transaction.like.upsert({
+          where: { quackId_userId: { quackId, userId } },
+          create: { quackId, userId },
+          update: {},
+        });
+        const likeCount = await transaction.like.count({ where: { quackId } });
+        return { likeCount, likedByMe: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  /**
+   * Removes the user's like if there is one (no like is not an error) and
+   * returns the quack's like state, or null when the quack doesn't exist or
+   * is deleted.
+   */
+  async removeLike(
+    quackId: string,
+    userId: string,
+  ): Promise<QuackLikes | null> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const quack = await transaction.quack.findUnique({
+          where: { id: quackId },
+          select: { deletedAt: true },
+        });
+        if (!quack || quack.deletedAt) return null;
+
+        await transaction.like.deleteMany({ where: { quackId, userId } });
+        const likeCount = await transaction.like.count({ where: { quackId } });
+        return { likeCount, likedByMe: false };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
   async getStats(): Promise<QuackStats> {
     const [quackCount, pollCount, voteCount] = await Promise.all([
       this.prisma.quack.count({ where: { deletedAt: null } }),
@@ -231,10 +305,11 @@ export class QuackRepository {
    * ADR 0001: a deleted quack becomes a tombstone. The row stays so replies
    * keep their parent, but its content is wiped in the same transaction.
    * Votes go first because a vote's option is ON DELETE RESTRICT; options
-   * cascade with their poll.
+   * cascade with their poll. Likes go too (ADR 0002).
    */
   async deleteQuack(quackId: string): Promise<void> {
     await this.prisma.$transaction([
+      this.prisma.like.deleteMany({ where: { quackId } }),
       this.prisma.pollVote.deleteMany({ where: { poll: { quackId } } }),
       this.prisma.poll.deleteMany({ where: { quackId } }),
       this.prisma.quack.update({

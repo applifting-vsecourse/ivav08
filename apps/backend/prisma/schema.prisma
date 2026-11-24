@@ -36,6 +36,7 @@ model Quack {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   polls     Poll[]
   replies   Reply[]
+  likes     Like[]
   userId    String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @default(now()) @updatedAt
@@ -62,6 +63,21 @@ model Reply {
   @@index([quackId, createdAt])
   @@index([userId])
   @@map("reply")
+}
+
+/// One row per user who likes a quack; the like count is counted from these
+/// rows, never stored. See docs/adr/0002-likes.md.
+model Like {
+  id        String   @id @default(cuid())
+  quackId   String
+  quack     Quack    @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([quackId, userId])
+  @@index([userId])
+  @@map("like")
 }
 
 model Poll {
@@ -167,6 +183,7 @@ model User {
   accounts        Account[]
   quacks          Quack[]
   replies         Reply[]
+  likes           Like[]
   pollVotes       PollVote[]
   role            UserRole  @default(user)
 

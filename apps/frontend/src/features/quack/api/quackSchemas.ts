@@ -46,12 +46,21 @@ export const quackSchema = z.object({
   // ADR 0001: a deleted quack comes back only as a placeholder for its replies
   deleted: z.boolean(),
   replies: z.array(replySchema),
+  // ADR 0002: counted from the like rows on the server
+  likeCount: z.number(),
+  likedByMe: z.boolean(),
+})
+
+export const quackLikesSchema = z.object({
+  likeCount: z.number(),
+  likedByMe: z.boolean(),
 })
 
 export const quacksSchema = z.array(quackSchema)
 
 export type Quack = z.infer<typeof quackSchema>
 export type Reply = z.infer<typeof replySchema>
+export type QuackLikes = z.infer<typeof quackLikesSchema>
 export type Poll = z.infer<typeof pollSchema>
 export type PollOption = z.infer<typeof pollOptionSchema>
 export type { QuackMood } from "@/lib/quack-moods"

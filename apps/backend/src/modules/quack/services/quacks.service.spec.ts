@@ -17,6 +17,8 @@ const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   deleted: false,
   polls: [],
   replies: [],
+  likeCount: 0,
+  likedByMe: false,
   user: { id: 'u1', name: 'Caffeinated Duck', username: 'CaffeinatedDuck' },
   ...overrides,
 });

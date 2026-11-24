@@ -50,3 +50,141 @@ jobs:
 
       - name: Build frontend
         run: pnpm frontend build
+
+  # Backend over real HTTP (supertest) against a real Postgres.
+  test-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: quacker
+          POSTGRES_PASSWORD: quacker
+          POSTGRES_DB: quacker_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U quacker -d quacker_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://quacker:quacker@localhost:5433/quacker_test
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create env files
+        run: pnpm env:check
+
+      - name: Generate Prisma client
+        run: pnpm backend prisma:generate
+
+      # The schema comes from the migrations (global setup runs migrate deploy).
+      - name: Integration tests
+        run: pnpm backend test:int
+
+  # The whole app in a browser: database, backend and frontend, then Playwright.
+  test-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: quacker
+          POSTGRES_PASSWORD: quacker
+          POSTGRES_DB: quacker
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U quacker -d quacker"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create env files
+        run: pnpm env:check
+
+      - name: Migrate and seed the database
+        run: |
+          pnpm backend migrate
+          pnpm backend seed
+
+      - name: Install Playwright browser
+        run: pnpm frontend exec playwright install --with-deps chromium
+
+      - name: Start backend and frontend
+        run: |
+          pnpm backend start > backend.log 2>&1 &
+          pnpm frontend dev > frontend.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl -sf -o /dev/null http://localhost:4050/api/docs &&
+              curl -sf -o /dev/null http://localhost:3050; then
+              echo "App is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The app did not start in time"
+          cat backend.log frontend.log
+          exit 1
+
+      - name: E2E tests
+        run: pnpm frontend e2e
+
+      - name: Upload Playwright traces and server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            apps/frontend/test-results
+            backend.log
+            frontend.log
+          if-no-files-found: ignore
+
+  # Test-first guard: tests may grow, but an existing test must not be
+  # weakened to make the code pass. Not a required check — it flags, the
+  # PR explains why in a comment.
+  test-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Existing tests lost no lines
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --numstat "$BASE_SHA"...HEAD -- \
+            '*.spec.ts' '*.int-spec.ts' '*.test.tsx' 'apps/frontend/e2e' |
+            awk '$2 > 0 { print $3 }')
+          if [ -n "$changed" ]; then
+            echo "::error::These test files have removed or rewritten lines:"
+            echo "$changed"
+            exit 1
+          fi
+          echo "Tests only gained lines."

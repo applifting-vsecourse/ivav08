@@ -27,5 +27,12 @@ export async function createQuack(
     },
   });
 
-  return { ...quack, deleted: false, polls: [], replies: [] };
+  return {
+    ...quack,
+    deleted: false,
+    polls: [],
+    replies: [],
+    likeCount: 0,
+    likedByMe: false,
+  };
 }

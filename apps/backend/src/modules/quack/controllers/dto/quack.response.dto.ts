@@ -115,6 +115,12 @@ export class QuackResponseDto {
   @ApiProperty({ type: () => [ReplyResponseDto] })
   replies!: ReplyResponseDto[];
 
+  @ApiProperty({ description: 'How many users like the quack (ADR 0002)' })
+  likeCount!: number;
+
+  @ApiProperty({ description: 'Whether the signed-in user likes it' })
+  likedByMe!: boolean;
+
   static fromDomain(quack: Quack): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
@@ -137,6 +143,8 @@ export class QuackResponseDto {
       createdAt: quack.createdAt,
       deleted: quack.deleted,
       replies: quack.replies.map((reply) => ReplyResponseDto.fromDomain(reply)),
+      likeCount: quack.likeCount,
+      likedByMe: quack.likedByMe,
       user: {
         id: quack.user.id,
         name: quack.user.name,

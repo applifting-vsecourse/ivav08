@@ -16,6 +16,7 @@ import {
 import { formatDate } from "@/lib/date"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
+import { LikeButton } from "@/features/quack/components/LikeButton"
 import { PollCard } from "@/features/quack/components/PollCard"
 import { ReplyForm } from "@/features/quack/components/ReplyForm"
 import { ReplyList } from "@/features/quack/components/ReplyList"
@@ -228,18 +229,27 @@ function LiveQuackItem({
           viewerUserId={viewerUserId}
           canModerate={canModerate}
         />
-        {canReply && !isReplying ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-fit text-muted-foreground"
-            onClick={() => setIsReplying(true)}
-          >
-            <MessageCircle />
-            Reply
-            {quack.replies.length > 0 ? ` · ${quack.replies.length}` : null}
-          </Button>
+        {canReply ? (
+          <div className="flex items-center gap-1">
+            <LikeButton
+              quackId={quack.id}
+              likeCount={quack.likeCount}
+              likedByMe={quack.likedByMe}
+            />
+            {!isReplying ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-fit text-muted-foreground"
+                onClick={() => setIsReplying(true)}
+              >
+                <MessageCircle />
+                Reply
+                {quack.replies.length > 0 ? ` · ${quack.replies.length}` : null}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         {canReply && isReplying ? (
           <ReplyForm
