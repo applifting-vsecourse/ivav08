@@ -21,6 +21,8 @@ const quack: Quack = {
   user: { id: "u1", name: "Caffeinated Duck", username: "CaffeinatedDuck" },
   polls: [],
   deleted: false,
+  likeCount: 0,
+  likedByMe: false,
   replies: [],
 }
 

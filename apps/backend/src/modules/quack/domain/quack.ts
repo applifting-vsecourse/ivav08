@@ -15,7 +15,17 @@ export type Quack = {
   deleted: boolean;
   polls: QuackPoll[];
   replies: QuackReply[];
+  /** Counted from the like rows; 0 for a deleted quack. ADR 0002. */
+  likeCount: number;
+  /** Whether the viewer is one of the likes. */
+  likedByMe: boolean;
   user?: QuackAuthor;
+};
+
+/** What liking or unliking returns: the quack's like state for the viewer. */
+export type QuackLikes = {
+  likeCount: number;
+  likedByMe: boolean;
 };
 
 export type QuackReply = {

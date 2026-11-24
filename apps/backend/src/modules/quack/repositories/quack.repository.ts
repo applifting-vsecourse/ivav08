@@ -10,6 +10,7 @@ import {
 import {
   Quack,
   QuackAuthor,
+  QuackLikes,
   QuackReply,
   QuackStats,
 } from '@/modules/quack/domain/quack';
@@ -73,6 +74,9 @@ const mapPrismaQuackToDomain = (
     updatedAt: quack.updatedAt,
     deleted: isDeleted,
     replies: (quack.replies ?? []).map(mapPrismaReplyToDomain),
+    // TODO(likes): count the like rows (red phase stub)
+    likeCount: 0,
+    likedByMe: false,
     polls: (isDeleted ? [] : (quack.polls ?? [])).map((poll) => {
       const myVoteOptionId =
         poll.options.find((option) =>
@@ -216,6 +220,20 @@ export class QuackRepository {
     });
     if (!quack || quack.deletedAt) return null;
     return quack.userId;
+  }
+
+  /** Saves the user's like (once) and returns the quack's like state. */
+  async addLike(quackId: string, userId: string): Promise<QuackLikes> {
+    void quackId;
+    void userId;
+    throw new Error('not implemented');
+  }
+
+  /** Removes the user's like, if any, and returns the quack's like state. */
+  async removeLike(quackId: string, userId: string): Promise<QuackLikes> {
+    void quackId;
+    void userId;
+    throw new Error('not implemented');
   }
 
   async getStats(): Promise<QuackStats> {
